@@ -17,8 +17,10 @@
  * Framework-free: http.ts and lambda.ts both call `handle()`.
  */
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { lookup } from 'node:dns/promises';
+import { lookup as dnsLookup } from 'node:dns';
+import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
+import { Readable } from 'node:stream';
 import type { StateStore } from 'shelf-to-alexa';
 
 export const SCOPE = 'shopper';
@@ -137,6 +139,37 @@ const PAGE_HEADERS = {
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 const MAX_CIMD = 5000;
 
+/** DNS lookup for https.request that refuses private addresses and hands the socket the address it checked. */
+function vettedLookup(hostname: string, opts: any, cb: (...a: any[]) => void): void {
+  dnsLookup(hostname, { all: true }, (err, addrs) => {
+    if (err) return cb(err);
+    if (!addrs.length || addrs.some((a) => privateAddress(a.address))) {
+      return cb(Object.assign(new Error('client_id host resolves to a private address'), { code: 'EPRIVATE' }));
+    }
+    if (opts?.all) return cb(null, addrs);
+    cb(null, addrs[0].address, addrs[0].family);
+  });
+}
+
+/** Minimal GET over https with vettedLookup, returned as a web Response (only what fetchCimd uses). */
+async function pinnedFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+  const url = new URL(String(input));
+  return new Promise((resolve, reject) => {
+    const req = httpsRequest(url, {
+      method: 'GET', lookup: vettedLookup as any, signal: init?.signal ?? undefined,
+      headers: (init?.headers as Record<string, string>) ?? {},
+    }, (res) => {
+      const status = res.statusCode ?? 0;
+      if (status >= 300 && status < 400) { res.destroy(); return reject(new Error('redirects are not followed')); }
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(res.headers)) if (typeof v === 'string') headers.set(k, v);
+      resolve(new Response(Readable.toWeb(res) as unknown as ReadableStream, { status, headers }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 /** True for loopback, private, link-local, CGNAT, multicast, unspecified and IPv6 ULA / mapped-private addresses. */
 export function privateAddress(ip: string): boolean {
   const v = isIP(ip);
@@ -190,8 +223,9 @@ export interface OAuthServer {
 
 export function createOAuth(deps: OAuthDeps): OAuthServer {
   const { secret, state } = deps;
-  const fetchFn = deps.fetchFn ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
-  const lookupFn = deps.lookupFn ?? (deps.fetchFn ? null : async (h: string) => (await lookup(h, { all: true })).map((r) => r.address));
+  // Production fetch is pinned (pinnedFetch): the address vetted as public is the one the socket connects to.
+  const fetchFn = deps.fetchFn ?? pinnedFetch;
+  const lookupFn = deps.lookupFn ?? null;
   const log = deps.log ?? (() => {});
   const mcpPaths = ['/mcp', ...deps.storeIds.map((id) => `/stores/${id}/mcp`)];
   const cimdCache = new Map<string, { client: Client; until: number }>();
@@ -255,8 +289,8 @@ export function createOAuth(deps: OAuthDeps): OAuthServer {
       return { error: 'client_id must be a public https URL with a path' };
     }
     try {
-      // SSRF guard: every address the host resolves to must be public. (A DNS answer that changes between this
-      // check and the fetch can still slip through; the fetch only reads 5 KB of JSON and never forwards it.)
+      // SSRF guard. In production pinnedFetch resolves, rejects private addresses and connects to the vetted address
+      // in one step (no DNS rebinding window). lookupFn is the same check for tests with an injected fetch.
       if (lookupFn) {
         const addrs = await lookupFn(host);
         if (!addrs.length || addrs.some(privateAddress)) return { error: 'client_id must be a public https URL with a path' };
