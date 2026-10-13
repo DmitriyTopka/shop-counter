@@ -1,0 +1,114 @@
+{
+ "kind": "compare",
+ "products": [
+  {
+   "id": "42419567493238",
+   "handle": "roborock-q7-l5",
+   "title": "Roborock Q7 L5 Robot Vacuum and Mop",
+   "vendor": "Roborock",
+   "price": 199.99,
+   "currency": "USD",
+   "compare_at_price": 249.99,
+   "available": true,
+   "image": "https://cdn.shopify.com/s/files/1/0082/3666/2902/files/TalcCB_Set.png?v=1762410446",
+   "url": "https://us.roborock.com/products/roborock-q7-l5",
+   "highlights": [
+    "8,000 Pa suction",
+    "Dual anti-tangle system",
+    "Vacuum + mop"
+   ],
+   "compatible_with": [],
+   "why": [
+    "Anti-tangle brush handles cat hair",
+    "$100 under your $300 budget"
+   ]
+  },
+  {
+   "id": "44217067110518",
+   "handle": "certified-refurbished-90-new-roborock-q7-m5-robot-vacuum-and-mop-with-auto-empty-dock-upgraded-from-q5-max",
+   "title": "Roborock Q7 M5+ (Certified Refurbished)",
+   "vendor": "Roborock",
+   "price": 259.99,
+   "currency": "USD",
+   "compare_at_price": 429.99,
+   "available": true,
+   "image": "https://cdn.shopify.com/s/files/1/0082/3666/2902/files/Talc_C_Pro_B_Set_11d6b30a-032c-42c4-a122-daaf14ae99a6.jpg?v=1757903621",
+   "url": "https://us.roborock.com/products/certified-refurbished-90-new-roborock-q7-m5-robot-vacuum-and-mop-with-auto-empty-dock-upgraded-from-q5-max",
+   "highlights": [
+    "10,000 Pa suction",
+    "LiDAR navigation",
+    "Refurbished, 90% new"
+   ],
+   "compatible_with": [],
+   "why": [
+    "Store says it 'prevents hair clogs'",
+    "LiDAR maps a small apartment fast"
+   ]
+  },
+  {
+   "id": "42224142909558",
+   "handle": "roborock-q10-s5-plus",
+   "title": "Roborock Q10 S5+ with Auto-Empty Dock",
+   "vendor": "Roborock",
+   "price": 279.99,
+   "currency": "USD",
+   "compare_at_price": 549.99,
+   "available": true,
+   "image": "https://cdn.shopify.com/s/files/1/0082/3666/2902/files/Talc_B_Set_cef1f1b2-9cfe-4fc6-a4f7-f622b68bfc57.jpg?v=1761973197",
+   "url": "https://us.roborock.com/products/roborock-q10-s5-plus",
+   "highlights": [
+    "10,000 Pa suction",
+    "Auto-empty dock",
+    "Dual anti-tangle system"
+   ],
+   "compatible_with": [],
+   "why": [
+    "Store says it 'prevents hair clogs'",
+    "Empties itself, less fur handling for you"
+   ]
+  }
+ ],
+ "rows": [
+  {
+   "label": "Price",
+   "values": [
+    "$199.99",
+    "$259.99",
+    "$279.99"
+   ]
+  },
+  {
+   "label": "Suction",
+   "values": [
+    "8,000 Pa",
+    "10,000 Pa",
+    "10,000 Pa"
+   ]
+  },
+  {
+   "label": "Pet hair",
+   "values": [
+    "Dual anti-tangle",
+    "Dual anti-tangle",
+    "Dual anti-tangle"
+   ]
+  },
+  {
+   "label": "Auto-empty dock",
+   "values": [
+    "No",
+    "Yes",
+    "Yes"
+   ]
+  },
+  {
+   "label": "Condition",
+   "values": [
+    "New",
+    "Refurbished",
+    "New"
+   ]
+  }
+ ],
+ "verdict": "With a cat, the Q10 S5+ is the easy pick: it empties itself, so you touch the fur less. The Q7 L5 saves $80 if you don't mind emptying the bin."
+}

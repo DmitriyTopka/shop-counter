@@ -1,0 +1,34 @@
+{
+  "mcpUrl": "http://localhost:8787/mcp",
+  "brainUrl": "http://127.0.0.1:8788",
+  "profiles": [
+    {
+      "id": "maya",
+      "name": "Maya",
+      "blurb": "new iPhone 15 owner",
+      "store": "Satechi",
+      "mcpPath": "/mcp",
+      "try": [
+        "Find a wireless charger for my iPhone 15",
+        "Compare them",
+        "Will the second one work with my iPhone 15?",
+        "Order the first one",
+        "Confirm"
+      ]
+    },
+    {
+      "id": "sam",
+      "name": "Sam",
+      "blurb": "cat owner, small apartment",
+      "store": "Roborock",
+      "mcpPath": "/stores/roborock/mcp",
+      "try": [
+        "Find a robot vacuum under $300, I have a cat",
+        "Compare them",
+        "Order the third one",
+        "Confirm",
+        "Where is my order?"
+      ]
+    }
+  ]
+}

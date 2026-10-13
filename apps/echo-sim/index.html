@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Shop Counter · Alexa+ simulator</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%227%22 fill=%22%232bc6ff%22/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="brand"><span class="dot"></span><strong>Shop Counter</strong><span class="muted">Alexa+ simulator</span></div>
+      <label class="field"><span>Shopper</span><select id="profile" aria-label="Shopper profile"></select></label>
+      <div class="seg" role="group" aria-label="Device">
+        <button type="button" data-device="show8" aria-pressed="true">Echo Show 8</button>
+        <button type="button" data-device="show15" aria-pressed="false">Echo Show 15</button>
+      </div>
+      <button type="button" class="chip-btn" id="new-session" title="Forget this conversation (the store still remembers you)">New session</button>
+      <span class="badge" id="mode" title="Who plays Alexa">connecting…</span>
+      <button type="button" class="chip-btn" id="toggle-log" aria-pressed="true" title="Show / hide MCP activity (L)">MCP activity</button>
+    </header>
+
+    <main class="stage">
+      <div class="device show8" id="device">
+        <div class="bezel">
+          <div class="cam" aria-hidden="true"></div>
+          <div class="screen" id="screen">
+            <div class="screen-inner" id="screen-inner">
+              <div class="statusbar"><span id="clock">--:--</span><span class="skill"><i></i>Shop Counter</span></div>
+              <section class="home" id="home">
+                <p class="home-time" id="home-time">--:--</p>
+                <p class="home-hi" id="home-hi">Hi there</p>
+                <div class="home-tiles" id="home-tiles"></div>
+              </section>
+              <p class="cap-user" id="cap-user" hidden></p>
+              <div class="app-area" id="app-area" hidden></div>
+              <p class="cap-alexa" id="cap-alexa" hidden></p>
+              <div class="lightbar" id="lightbar" data-state="idle" aria-hidden="true"></div>
+            </div>
+            <div class="app-layer" id="app-layer" hidden></div>
+          </div>
+        </div>
+        <div class="base" aria-hidden="true"></div>
+      </div>
+
+      <form class="remote" id="remote" autocomplete="off">
+        <button type="button" class="mic" id="mic" aria-label="Hold to talk to Alexa (or press Space)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zM5 11a7 7 0 0014 0M12 18v3" /></svg>
+        </button>
+        <input id="say" placeholder="Type what you'd say to Alexa…" aria-label="Say to Alexa" />
+        <button type="submit" class="send">Send</button>
+        <div class="tries" id="tries" aria-label="Try saying"></div>
+      </form>
+    </main>
+
+    <aside class="activity" id="activity" aria-label="MCP activity">
+      <div class="act-head">
+        <div><strong>MCP activity</strong><p class="muted" id="proto">not connected</p></div>
+        <button type="button" class="chip-btn" id="clear-log">Clear</button>
+      </div>
+      <div class="legend"><span class="l-mcp">MCP server</span><span class="l-ui">App view</span><span class="l-llm">Alexa brain</span></div>
+      <ol class="log" id="log"></ol>
+    </aside>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

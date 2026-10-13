@@ -1,0 +1,1731 @@
+{
+  "version": 1,
+  "about": "Real shopper requests for Shop Counter (Satechi, Roborock). Each case: what the shopper said, the tool calls a good assistant makes (steps), what the server must answer (expect), and what the no-LLM router must pick (router). Traps come from a live shop-assistant bot (TT Bot). Facts are audited against the raw store feed on every answer. Runner: evals/run.mjs. Round 2 (2026-10-12): x-* cases cover the shopper-owned closet across stores, auth-* cases the signed session.",
+  "cases": [
+    {
+      "id": "sat-01-budget-below-catalog",
+      "store": "satechi",
+      "trap": "budget below the whole catalog",
+      "utterance": "Find me a phone charger under 5 dollars",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "phone charger",
+            "max_price": 5
+          },
+          "expect": {
+            "kind": "products",
+            "maxProducts": 0,
+            "say": [
+              "under \\$5",
+              "starts at \\$"
+            ],
+            "sayNot": [
+              "best fit"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products",
+          "args": {
+            "max_price": 5
+          }
+        }
+      }
+    },
+    {
+      "id": "sat-02-named-out-of-stock",
+      "store": "satechi",
+      "trap": "product out of stock, no silent swap",
+      "utterance": "Do you have the ChargeView 240W in stock?",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "ChargeView 240W"
+          },
+          "expect": {
+            "kind": "products",
+            "say": [
+              "out of stock|none (are|is) in stock"
+            ],
+            "sayNot": [
+              "best fit"
+            ],
+            "titlesNone": "140W"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products"
+        }
+      }
+    },
+    {
+      "id": "sat-03-anything-cheaper",
+      "store": "satechi",
+      "trap": "\"is there anything cheaper?\" keeps the need and lowers the budget",
+      "utterance": "Is there anything cheaper?",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "wall charger for my MacBook Air"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "wall charger for my MacBook Air",
+            "max_price": "$cheaper:setup0"
+          },
+          "expect": {
+            "kind": "products",
+            "priceBelow": "$setup0.products[0].price"
+          }
+        }
+      ],
+      "router": {
+        "screen": "$setup0",
+        "expect": {
+          "tool": "find_products",
+          "args": {
+            "need": "wall charger"
+          }
+        }
+      }
+    },
+    {
+      "id": "sat-04-nonexistent-model",
+      "store": "satechi",
+      "trap": "a model that does not exist (no 300W charger in the store)",
+      "utterance": "I want the Satechi 300W charger",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "Satechi 300W charger"
+          },
+          "expect": {
+            "kind": "products",
+            "maxProducts": 0,
+            "say": [
+              "300W"
+            ],
+            "sayNot": [
+              "best fit"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sat-05-android-pixel",
+      "store": "satechi",
+      "trap": "Android / Pixel: never claim compatibility the store does not list",
+      "utterance": "Will this charger work with my Pixel 8?",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "USB-C wall charger"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "$setup0.products[0].id",
+            "device": "Pixel 8"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": [
+              "not_listed",
+              "confirmed"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "screen": "$setup0",
+        "expect": {
+          "tool": "check_compatibility",
+          "args": {
+            "device": "Pixel 8"
+          }
+        }
+      }
+    },
+    {
+      "id": "sat-06-lightning-on-usbc-phone",
+      "store": "satechi",
+      "trap": "Lightning cable for a USB-C iPhone",
+      "utterance": "Does the USB-C to Lightning cable work with my iPhone 16?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^USB-C to Lightning Cable",
+            "device": "iPhone 16"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "incompatible",
+            "say": [
+              "won't work|no\\b"
+            ],
+            "sayNot": [
+              "^yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sat-07-usbc-cable-on-lightning-phone",
+      "store": "satechi",
+      "trap": "USB-C to USB-C cable for a Lightning iPhone",
+      "utterance": "Will the 10 inch USB-C to USB-C cable charge my iPhone 13?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^USB-C to USB-C Cable - 10",
+            "device": "iPhone 13"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "incompatible",
+            "sayNot": [
+              "^yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sat-08-lightning-cable-search",
+      "store": "satechi",
+      "trap": "asks for Lightning, must not get USB-C-only cables",
+      "utterance": "I need a Lightning cable for my old iPhone 11",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "Lightning cable for my old iPhone 11"
+          },
+          "expect": {
+            "kind": "products",
+            "titlesAll": "Lightning"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products"
+        }
+      }
+    },
+    {
+      "id": "sat-09-magsafe-tag-is-not-a-promise",
+      "store": "satechi",
+      "trap": "MagSafe vs Qi2: a \"magsafe charger\" merchandising tag on a cable is not compatibility",
+      "utterance": "Is the 10 inch USB-C cable MagSafe compatible?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^USB-C to USB-C Cable - 10",
+            "device": "MagSafe"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": [
+              "not_listed",
+              "incompatible"
+            ],
+            "sayNot": [
+              "^yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sat-10-qi2-search",
+      "store": "satechi",
+      "trap": "MagSafe vs Qi2: a Qi2 request gets Qi2 products, not plain Qi",
+      "utterance": "Show me Qi2 wireless chargers",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "Qi2 wireless charger"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 2,
+            "titlesAll": "Qi2"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products"
+        }
+      }
+    },
+    {
+      "id": "sat-11-discount-code",
+      "store": "satechi",
+      "trap": "discount / promo code: not in the feed, hand off, do not invent",
+      "utterance": "Do you have a promo code or any discount for me?",
+      "steps": [
+        {
+          "tool": "talk_to_staff",
+          "args": {
+            "reason": "Shopper asks for a promo code or discount"
+          },
+          "expect": {
+            "kind": "handoff",
+            "say": [
+              "ticket"
+            ],
+            "sayNot": [
+              "%|code is"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "talk_to_staff"
+        }
+      }
+    },
+    {
+      "id": "sat-12-warranty",
+      "store": "satechi",
+      "trap": "warranty question: not in the feed, hand off",
+      "utterance": "What's the warranty on the OntheGo charger?",
+      "steps": [
+        {
+          "tool": "talk_to_staff",
+          "args": {
+            "reason": "Warranty question about the OntheGo charger"
+          },
+          "expect": {
+            "kind": "handoff"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "talk_to_staff"
+        }
+      }
+    },
+    {
+      "id": "sat-13-shipping-cost",
+      "store": "satechi",
+      "trap": "shipping cost: unknown, total is before shipping, never \"free shipping\"",
+      "utterance": "How much is shipping to Texas?",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "car charger"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "prepare_order",
+          "args": {
+            "items": [
+              {
+                "id": "$setup0.products[0].id",
+                "qty": 1
+              }
+            ]
+          },
+          "expect": {
+            "kind": "order_preview",
+            "say": [
+              "before shipping"
+            ],
+            "sayNot": [
+              "free shipping"
+            ]
+          }
+        },
+        {
+          "tool": "talk_to_staff",
+          "args": {
+            "reason": "Shipping cost to Texas"
+          },
+          "expect": {
+            "kind": "handoff"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "talk_to_staff"
+        }
+      }
+    },
+    {
+      "id": "sat-14-ambiguous-cable",
+      "store": "satechi",
+      "trap": "ambiguous request: show a few options, do not pick one blindly",
+      "utterance": "I need a cable",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "cable"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 2,
+            "allAvailable": true
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products",
+          "args": {
+            "need": "cable"
+          }
+        }
+      }
+    },
+    {
+      "id": "sat-15-typos",
+      "store": "satechi",
+      "trap": "typos from speech-to-text or a quick chat",
+      "utterance": "chargr for my macbok air",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "chargr for my macbok air"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "titlesAll": "charg"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products"
+        }
+      }
+    },
+    {
+      "id": "sat-16-repeat-purchase",
+      "store": "satechi",
+      "trap": "\"order the same again\": find the last order in a new session, prepare it again",
+      "utterance": "Order the same charger as last time",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "car charger"
+          }
+        },
+        {
+          "tool": "prepare_order",
+          "args": {
+            "items": [
+              {
+                "id": "$setup0.products[0].id",
+                "qty": 1
+              }
+            ]
+          }
+        },
+        {
+          "tool": "place_order",
+          "args": {
+            "confirmation_token": "$setup1.confirmation_token"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "order_status",
+          "args": {},
+          "newSession": true,
+          "expect": {
+            "kind": "orders",
+            "orderId": "$setup2.order.id"
+          }
+        },
+        {
+          "tool": "prepare_order",
+          "args": {
+            "items": [
+              {
+                "id": "$s0.orders[0].items[0].product.id",
+                "qty": 1
+              }
+            ]
+          },
+          "expect": {
+            "kind": "order_preview",
+            "say": [
+              "Should I place the order"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "order_status"
+        }
+      }
+    },
+    {
+      "id": "sat-17-cancel-order",
+      "store": "satechi",
+      "trap": "cancel an order: there is no cancel tool, say so and hand off; never claim it is cancelled",
+      "utterance": "Cancel my order please",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "car charger"
+          }
+        },
+        {
+          "tool": "prepare_order",
+          "args": {
+            "items": [
+              {
+                "id": "$setup0.products[0].id",
+                "qty": 1
+              }
+            ]
+          }
+        },
+        {
+          "tool": "place_order",
+          "args": {
+            "confirmation_token": "$setup1.confirmation_token"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "talk_to_staff",
+          "args": {
+            "reason": "Shopper wants to cancel order $setup2.order.id"
+          },
+          "expect": {
+            "kind": "handoff",
+            "sayNot": [
+              "cancell?ed"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "talk_to_staff",
+          "notTool": "place_order"
+        }
+      }
+    },
+    {
+      "id": "sat-18-competitor-brand",
+      "store": "satechi",
+      "trap": "competitor brand: say the store does not carry it, do not pass Satechi off as Anker",
+      "utterance": "Do you sell Anker chargers?",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "Anker charger"
+          },
+          "expect": {
+            "kind": "products",
+            "say": [
+              "Anker"
+            ],
+            "sayNot": [
+              "best fit is the"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products"
+        }
+      }
+    },
+    {
+      "id": "sat-19-closet-memory",
+      "store": "satechi",
+      "trap": "device closet survives a new session and drives the search",
+      "utterance": "I have an iPhone 15 and a MacBook Air. Later: find me a charger",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "iPhone 15",
+              "MacBook Air"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "charger"
+          },
+          "newSession": true,
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "say": [
+              "iPhone 15|MacBook Air"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sat-20-compare-marked-cards",
+      "store": "satechi",
+      "trap": "\"compare them\" compares the cards the shopper marked on screen, not the first two",
+      "utterance": "Compare them",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "wireless charging stand"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "compare_products",
+          "args": {
+            "ids": [
+              "$setup0.products[0].id",
+              "$setup0.products[2].id"
+            ]
+          },
+          "expect": {
+            "kind": "compare",
+            "compareIds": [
+              "$setup0.products[0].id",
+              "$setup0.products[2].id"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "screen": "$setup0",
+        "selected": [
+          "$setup0.products[0].id",
+          "$setup0.products[2].id"
+        ],
+        "expect": {
+          "tool": "compare_products",
+          "args": {
+            "ids": [
+              "$setup0.products[0].id",
+              "$setup0.products[2].id"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "sat-21-no-order-without-yes",
+      "store": "satechi",
+      "trap": "a pending order is not placed on \"maybe later\"",
+      "utterance": "Hmm, maybe later",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "car charger"
+          }
+        },
+        {
+          "tool": "prepare_order",
+          "args": {
+            "items": [
+              {
+                "id": "$setup0.products[0].id",
+                "qty": 1
+              }
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "order_status",
+          "args": {},
+          "expect": {
+            "kind": "orders",
+            "ordersCount": 0
+          }
+        }
+      ],
+      "router": {
+        "screen": "$setup0",
+        "token": "$setup1.confirmation_token",
+        "expect": {
+          "notTool": "place_order"
+        }
+      }
+    },
+    {
+      "id": "sat-22-double-confirm",
+      "store": "satechi",
+      "trap": "\"yes\" said twice must not create two orders",
+      "utterance": "Yes, place it. Yes!",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "car charger"
+          }
+        },
+        {
+          "tool": "prepare_order",
+          "args": {
+            "items": [
+              {
+                "id": "$setup0.products[0].id",
+                "qty": 1
+              }
+            ]
+          }
+        },
+        {
+          "tool": "place_order",
+          "args": {
+            "confirmation_token": "$setup1.confirmation_token"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "place_order",
+          "args": {
+            "confirmation_token": "$setup1.confirmation_token"
+          },
+          "expect": {
+            "kind": "order",
+            "alreadyPlaced": true,
+            "orderId": "$setup2.order.id"
+          }
+        },
+        {
+          "tool": "order_status",
+          "args": {},
+          "expect": {
+            "ordersCount": 1
+          }
+        }
+      ],
+      "router": {
+        "token": "$setup1.confirmation_token",
+        "expect": {
+          "tool": "place_order"
+        }
+      }
+    },
+    {
+      "id": "sat-23-order-out-of-stock",
+      "store": "satechi",
+      "trap": "ordering an out-of-stock item is refused",
+      "utterance": "Just order the ChargeView 240W",
+      "steps": [
+        {
+          "tool": "prepare_order",
+          "args": {
+            "items": [
+              {
+                "id": "@title:^ChargeView.{0,3} 240W",
+                "qty": 1
+              }
+            ]
+          },
+          "expect": {
+            "isError": true,
+            "code": "out_of_stock",
+            "say": [
+              "out of stock"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sat-24-hub-for-macbook-pro",
+      "store": "satechi",
+      "trap": "spec request (HDMI 4K hub) for a laptop",
+      "utterance": "I need a USB-C hub with 4K HDMI for my MacBook Pro",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "USB-C hub with 4K HDMI for my MacBook Pro"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "titlesAll": "hub|adapter|dock|stand"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products"
+        }
+      }
+    },
+    {
+      "id": "sat-25-galaxy-not-listed",
+      "store": "satechi",
+      "trap": "Samsung phone on an Apple-listed product: \"can't confirm\", not \"yes\"",
+      "utterance": "Does the Qi2 car charger work with my Galaxy S24?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Qi2 Wireless Car Charger",
+            "device": "Galaxy S24"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "not_listed",
+            "say": [
+              "can't confirm|doesn't list"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "rob-01-robot-for-cat",
+      "store": "roborock",
+      "trap": "robot vacuum: wet-dry and stick vacuums the store files under Robot Vacuums must not appear",
+      "utterance": "I need a robot vacuum for a home with a cat, under 300 dollars",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "robot vacuum for a home with a cat",
+            "max_price": 300
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 2,
+            "priceMax": 300,
+            "titlesAll": "robot",
+            "titlesNone": "F25|H60|wet|stick|cordless|\\bYears?\\b"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products",
+          "args": {
+            "max_price": 300
+          }
+        }
+      }
+    },
+    {
+      "id": "rob-02-robot-budget-too-low",
+      "store": "roborock",
+      "trap": "budget below every robot: no warranty plans or cleaning fluid passed off as a robot",
+      "utterance": "Robot vacuum under 50 dollars",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "robot vacuum",
+            "max_price": 50
+          },
+          "expect": {
+            "kind": "products",
+            "maxProducts": 0,
+            "say": [
+              "under \\$50"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products",
+          "args": {
+            "max_price": 50
+          }
+        }
+      }
+    },
+    {
+      "id": "rob-03-stick-vacuum",
+      "store": "roborock",
+      "trap": "stick vacuum request gets stick vacuums, not robots",
+      "utterance": "Show me a cordless stick vacuum",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "cordless stick vacuum"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 2,
+            "titlesAll": "stick|cordless",
+            "titlesNone": "robot"
+          }
+        }
+      ]
+    },
+    {
+      "id": "rob-04-wet-dry-not-accessory",
+      "store": "roborock",
+      "trap": "\"wet dry vacuum\" must not return a brush made FOR a wet dry vacuum",
+      "utterance": "Wet dry vacuum under 200 dollars",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "wet dry vacuum",
+            "max_price": 200
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "titlesAll": "wet",
+            "titlesNone": "brush|filter|solution|cloth"
+          }
+        }
+      ]
+    },
+    {
+      "id": "rob-05-nonexistent-model",
+      "store": "roborock",
+      "trap": "model that does not exist (S9): say so, do not present another model as it",
+      "utterance": "Do you have the Roborock S9 MaxV Ultra?",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "Roborock S9 MaxV Ultra"
+          },
+          "expect": {
+            "kind": "products",
+            "say": [
+              "S9"
+            ],
+            "sayNot": [
+              "best fit is the"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "rob-06-competitor",
+      "store": "roborock",
+      "trap": "competitor product (Roomba)",
+      "utterance": "Do you have a Roomba?",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "Roomba"
+          },
+          "expect": {
+            "kind": "products",
+            "maxProducts": 0,
+            "say": [
+              "Roomba|couldn't find"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "rob-07-typo-pet-hair",
+      "store": "roborock",
+      "trap": "typo plus a pet need",
+      "utterance": "robot vacum for pet hair",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "robot vacum for pet hair"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 2,
+            "titlesNone": "F25|H60|wet|stick|cordless|\\bYears?\\b"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products"
+        }
+      }
+    },
+    {
+      "id": "rob-08-store-says-not-compatible",
+      "store": "roborock",
+      "trap": "the title says \"Not compatible with Saros 10R\": that is a no, not a literal match",
+      "utterance": "Will the accessories pack for Saros 10 fit my Saros 10R?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:Accessories Pack for Saros 10 \\(Not compatible",
+            "device": "Saros 10R"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "incompatible",
+            "sayNot": [
+              "^yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "rob-09-warranty-plan-on-request",
+      "store": "roborock",
+      "trap": "protection plans are products only when asked for",
+      "utterance": "Do you sell an extended warranty for the Q7 M5?",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "extended warranty for Q7 M5"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "topTitle": "Q7 M5.*Years?"
+          }
+        }
+      ]
+    },
+    {
+      "id": "rob-10-model-search",
+      "store": "roborock",
+      "trap": "a named model comes first; trade-in offers stay out unless asked",
+      "utterance": "S8 Max Ultra robot vacuum",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "S8 Max Ultra robot vacuum"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "titlesAll": "S8",
+            "titlesNone": "trade"
+          }
+        }
+      ]
+    },
+    {
+      "id": "rob-11-compare-two-marked",
+      "store": "roborock",
+      "trap": "compare the marked robots and give a verdict from feed facts",
+      "utterance": "Compare the ones I marked",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "robot vacuum for a home with a cat",
+            "max_price": 600
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "compare_products",
+          "args": {
+            "ids": [
+              "$setup0.products[1].id",
+              "$setup0.products[2].id"
+            ]
+          },
+          "expect": {
+            "kind": "compare",
+            "compareIds": [
+              "$setup0.products[1].id",
+              "$setup0.products[2].id"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "screen": "$setup0",
+        "selected": [
+          "$setup0.products[1].id",
+          "$setup0.products[2].id"
+        ],
+        "expect": {
+          "tool": "compare_products",
+          "args": {
+            "ids": [
+              "$setup0.products[1].id",
+              "$setup0.products[2].id"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "rob-12-order-then-status-new-session",
+      "store": "roborock",
+      "trap": "two-step order, then \"where is my order\" in a new session",
+      "utterance": "When will my vacuum arrive?",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "robot vacuum for a home with a cat",
+            "max_price": 300
+          }
+        },
+        {
+          "tool": "prepare_order",
+          "args": {
+            "items": [
+              {
+                "id": "$setup0.products[0].id",
+                "qty": 1
+              }
+            ]
+          }
+        },
+        {
+          "tool": "place_order",
+          "args": {
+            "confirmation_token": "$setup1.confirmation_token"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "order_status",
+          "args": {},
+          "newSession": true,
+          "expect": {
+            "kind": "orders",
+            "orderId": "$setup2.order.id",
+            "say": [
+              "expected by"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "order_status"
+        }
+      }
+    },
+    {
+      "id": "rob-13-discount-on-robot",
+      "store": "roborock",
+      "trap": "\"any coupon?\": sale price comes from the feed, coupons go to staff",
+      "utterance": "Is there a coupon for the Q10?",
+      "steps": [
+        {
+          "tool": "talk_to_staff",
+          "args": {
+            "reason": "Coupon for the Q10"
+          },
+          "expect": {
+            "kind": "handoff"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "talk_to_staff"
+        }
+      }
+    },
+    {
+      "id": "rob-14-return-policy",
+      "store": "roborock",
+      "trap": "returns: hand off, no invented policy",
+      "utterance": "Can I return it if my cat hates it?",
+      "steps": [
+        {
+          "tool": "talk_to_staff",
+          "args": {
+            "reason": "Return policy question"
+          },
+          "expect": {
+            "kind": "handoff",
+            "sayNot": [
+              "30 days|days"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "talk_to_staff"
+        }
+      }
+    },
+    {
+      "id": "sat-h01-galaxy-charger",
+      "store": "satechi",
+      "trap": "Android phone, generic charger request",
+      "utterance": "I need a charger for my Samsung Galaxy S24",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "charger for my Samsung Galaxy S24"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "titlesAll": "charg|power"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products"
+        }
+      },
+      "holdout": true
+    },
+    {
+      "id": "sat-h02-keyboard-budget",
+      "store": "satechi",
+      "trap": "category plus budget",
+      "utterance": "A keyboard for my Mac under 80 dollars",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "keyboard for my Mac",
+            "max_price": 80
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "priceMax": 80,
+            "titlesAll": "keyboard|keypad"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products",
+          "args": {
+            "max_price": 80
+          }
+        }
+      },
+      "holdout": true
+    },
+    {
+      "id": "sat-h03-pro-max-series",
+      "store": "satechi",
+      "trap": "Pro Max on a product listed for the iPhone 15 series",
+      "utterance": "Will the OntheGo 67W work with my iPhone 15 Pro Max?",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "OntheGo 67W charger"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "$setup0.products[0].id",
+            "device": "iPhone 15 Pro Max"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": [
+              "confirmed",
+              "not_listed"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "screen": "$setup0",
+        "expect": {
+          "tool": "check_compatibility",
+          "args": {
+            "device": "iPhone 15 Pro Max"
+          }
+        }
+      },
+      "holdout": true
+    },
+    {
+      "id": "sat-h04-typo-mouse",
+      "store": "satechi",
+      "trap": "two typos",
+      "utterance": "wirless mous",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "wirless mous"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "titlesAll": "mouse|combo"
+          }
+        }
+      ],
+      "holdout": true,
+      "note": "Expectation corrected after the first held-out run: the Slim CEX1 Wireless Combo is a keyboard + mouse set."
+    },
+    {
+      "id": "sat-h05-belkin",
+      "store": "satechi",
+      "trap": "competitor brand plus a real product type",
+      "utterance": "Do you have a Belkin MagSafe stand?",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "Belkin MagSafe stand"
+          },
+          "expect": {
+            "kind": "products",
+            "say": [
+              "Belkin"
+            ]
+          }
+        }
+      ],
+      "holdout": true
+    },
+    {
+      "id": "sat-h06-buy-two",
+      "store": "satechi",
+      "trap": "quantity by voice",
+      "utterance": "Buy 2 of the first one",
+      "setup": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "car charger"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "prepare_order",
+          "args": {
+            "items": [
+              {
+                "id": "$setup0.products[0].id",
+                "qty": 2
+              }
+            ]
+          },
+          "expect": {
+            "kind": "order_preview",
+            "say": [
+              "2 of the"
+            ]
+          }
+        }
+      ],
+      "router": {
+        "screen": "$setup0",
+        "expect": {
+          "tool": "prepare_order",
+          "args": {
+            "items": [
+              {
+                "id": "$setup0.products[0].id",
+                "qty": 2
+              }
+            ]
+          }
+        }
+      },
+      "holdout": true
+    },
+    {
+      "id": "rob-h01-self-empty",
+      "store": "roborock",
+      "trap": "feature plus budget, no plans or trade-ins",
+      "utterance": "Self-emptying robot vacuum under 400 dollars",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "self-emptying robot vacuum",
+            "max_price": 400
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "priceMax": 400,
+            "titlesAll": "robot",
+            "titlesNone": "\\bYears?\\b|trade"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products",
+          "args": {
+            "max_price": 400
+          }
+        }
+      },
+      "holdout": true
+    },
+    {
+      "id": "rob-h02-eufy",
+      "store": "roborock",
+      "trap": "competitor brand",
+      "utterance": "Do you sell Eufy robot vacuums?",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "Eufy robot vacuum"
+          },
+          "expect": {
+            "kind": "products",
+            "say": [
+              "Eufy"
+            ],
+            "sayNot": [
+              "best fit is the"
+            ]
+          }
+        }
+      ],
+      "holdout": true
+    },
+    {
+      "id": "rob-h03-filters-q7",
+      "store": "roborock",
+      "trap": "accessory for a model is a legit request",
+      "utterance": "Do you have replacement filters for the Q7?",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "replacement filter for Q7"
+          },
+          "expect": {
+            "kind": "products",
+            "say": [
+              "out of stock|filter"
+            ],
+            "titlesNone": "\\bYears?\\b",
+            "titlesAll": "filter"
+          }
+        }
+      ],
+      "holdout": true,
+      "note": "Expectation corrected after the first held-out run: the only Q7 filter in the feed is out of stock, and the server says so."
+    },
+    {
+      "id": "rob-h04-q10-in-stock",
+      "store": "roborock",
+      "trap": "stock question about a named model",
+      "utterance": "Is the Q10 in stock?",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "Q10"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "titlesAll": "Q10"
+          }
+        }
+      ],
+      "holdout": true
+    },
+    {
+      "id": "rob-h05-deliver-by-friday",
+      "store": "roborock",
+      "trap": "delivery promise: not in the feed, hand off",
+      "utterance": "Can you deliver it by Friday?",
+      "steps": [
+        {
+          "tool": "talk_to_staff",
+          "args": {
+            "reason": "Can it be delivered by Friday?"
+          },
+          "expect": {
+            "kind": "handoff"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "talk_to_staff"
+        }
+      },
+      "holdout": true
+    },
+    {
+      "id": "rob-h06-big-house",
+      "store": "roborock",
+      "trap": "vague need",
+      "utterance": "What's your best robot vacuum for a big house?",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "robot vacuum for a big house"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "titlesNone": "F25|H60|wet|stick|cordless|\\bYears?\\b|trade"
+          }
+        }
+      ],
+      "router": {
+        "expect": {
+          "tool": "find_products"
+        }
+      },
+      "holdout": true
+    },
+    {
+      "id": "x-01-closet-shared-across-stores",
+      "store": "satechi",
+      "trap": "the closet belongs to the shopper: devices saved at Satechi are known at Roborock, with one tip from Roborock's own data",
+      "utterance": "(at Satechi) I have an iPhone 15 and a Roborock Q7 M5. Later, at Roborock: what do you know about my stuff?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "iPhone 15",
+              "Roborock Q7 M5"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "my_devices",
+          "args": {},
+          "store": "roborock",
+          "newSession": true,
+          "expect": {
+            "kind": "closet",
+            "devicesHas": [
+              "iPhone 15",
+              "Roborock Q7 M5"
+            ],
+            "suggestionTitle": "Q7 M5",
+            "say": [
+              "Roborock lists the .+ for your Q7 M5, at \\$"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "x-02-closet-answer-without-model",
+      "store": "satechi",
+      "trap": "\"will this work with my phone?\" without naming the model: the closet answers, the store vouches",
+      "utterance": "Will this charger work with my phone?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "iPhone 15"
+            ]
+          }
+        },
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "wireless charger"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "$setup1.products[0].id"
+          },
+          "newSession": true,
+          "expect": {
+            "kind": "compat",
+            "status": "confirmed",
+            "deviceSource": "closet",
+            "say": [
+              "^Works with your iPhone 15"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "x-03-closet-refusal-with-quote",
+      "store": "roborock",
+      "trap": "the remembered robot is the one the store rules out: say no with the store's words and offer a listed part",
+      "utterance": "Does the Saros 10 accessories pack fit my robot?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "Roborock Saros 10R"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:Accessories Pack for Saros 10 \\(Not compatible"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "incompatible",
+            "deviceSource": "closet",
+            "say": [
+              "won't work with your Saros 10R",
+              "store says \"not compatible with Saros 10R",
+              "is listed for it, at \\$"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "auth-01-forged-session",
+      "store": "satechi",
+      "trap": "a session token with a swapped shopper id is refused (HTTP 401), never treated as Maya",
+      "utterance": "(attacker) my_devices as demo-maya with a re-used signature",
+      "steps": [
+        {
+          "tool": "my_devices",
+          "args": {},
+          "auth": "forged",
+          "expect": {
+            "rejected": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "auth-02-bare-user-header-ignored",
+      "store": "satechi",
+      "trap": "a bare x-user-id header is not an identity: anonymous, no closet, no orders",
+      "utterance": "(old client) my_devices with only x-user-id",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "iPhone 15"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "my_devices",
+          "args": {},
+          "auth": "x-user-id",
+          "expect": {
+            "isError": true,
+            "code": "anonymous"
+          }
+        },
+        {
+          "tool": "order_status",
+          "args": {},
+          "auth": "none",
+          "expect": {
+            "isError": true,
+            "code": "anonymous"
+          }
+        }
+      ]
+    },
+    {
+      "id": "auth-03-other-shopper-sees-nothing",
+      "store": "roborock",
+      "trap": "another signed shopper never sees this shopper's closet, in any store",
+      "utterance": "(second shopper) what devices do I have?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "iPhone 15"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "my_devices",
+          "args": {},
+          "auth": "other",
+          "store": "satechi",
+          "expect": {
+            "kind": "closet",
+            "devicesCount": 0
+          }
+        }
+      ]
+    }
+  ]
+}

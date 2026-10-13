@@ -1,0 +1,30 @@
+{
+  "name": "@shop-counter/view",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP App view for Shop Counter: one self-contained HTML file that renders every structuredContent kind (Echo Show style).",
+  "license": "MIT",
+  "exports": {
+    "./view.html": "./dist/view.html",
+    "./fixtures/*": "./fixtures/*"
+  },
+  "files": ["dist", "fixtures"],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "vitest run",
+    "preview": "node scripts/build.mjs && node scripts/preview.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
+    "@modelcontextprotocol/core": "2.3.1",
+    "@modelcontextprotocol/ext-apps": "2.0.3",
+    "@modelcontextprotocol/server": "2.3.1",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.2",
+    "vitest": "^5.0.4"
+  }
+}

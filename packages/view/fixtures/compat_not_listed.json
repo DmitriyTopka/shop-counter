@@ -1,0 +1,91 @@
+{
+ "kind": "compat",
+ "product": {
+  "id": "41796984307800",
+  "handle": "qi2-wireless-car-charger",
+  "title": "Qi2 Wireless Car Charger",
+  "vendor": "Satechi",
+  "price": 59.99,
+  "currency": "USD",
+  "compare_at_price": null,
+  "available": true,
+  "image": "https://cdn.shopify.com/s/files/1/1520/4366/files/qi2-wireless-car-charger-car-chargers-satechi-191405.png?v=1762441609",
+  "url": "https://satechi.com/products/qi2-wireless-car-charger",
+  "highlights": [
+   "15W Qi2",
+   "Magnetic car mount"
+  ],
+  "compatible_with": [
+   "iPhone 12",
+   "iPhone 13",
+   "iPhone 15",
+   "iPhone 16",
+   "iPhone 17"
+  ],
+  "why": [
+   "Store lists iPhone 15 as compatible",
+   "Cheapest Qi2 option"
+  ]
+ },
+ "device": "Galaxy S24",
+ "status": "not_listed",
+ "evidence": null,
+ "alternatives": [
+  {
+   "id": "40908702089304",
+   "handle": "2-in-1-foldable-qi2-wireless-charging-stand",
+   "title": "2-in-1 Foldable Qi2 Wireless Charging Stand",
+   "vendor": "Satechi",
+   "price": 79.99,
+   "currency": "USD",
+   "compare_at_price": null,
+   "available": true,
+   "image": "https://cdn.shopify.com/s/files/1/1520/4366/files/2-in-1-foldable-qi2-wireless-charging-stand-wireless-chargers-satechi-136236.png?v=1762441533",
+   "url": "https://satechi.com/products/2-in-1-foldable-qi2-wireless-charging-stand",
+   "highlights": [
+    "15W Qi2 for iPhone",
+    "5W for AirPods",
+    "Folds flat for travel"
+   ],
+   "compatible_with": [
+    "iPhone 12",
+    "iPhone 13",
+    "iPhone 15",
+    "iPhone 16",
+    "iPhone 17"
+   ],
+   "why": [
+    "Store lists iPhone 15 as compatible",
+    "Folds flat, good for your nightstand or bag"
+   ]
+  },
+  {
+   "id": "43932202696792",
+   "handle": "onthego-2-in-1-charger",
+   "title": "OntheGo™ 2-in-1 Charger",
+   "vendor": "Satechi",
+   "price": 79.99,
+   "currency": "USD",
+   "compare_at_price": null,
+   "available": true,
+   "image": "https://cdn.shopify.com/s/files/1/1520/4366/files/onthego-2-in-1-charger-wireless-chargers-satechi-black-897980.webp?v=1762441795",
+   "url": "https://satechi.com/products/onthego-2-in-1-charger",
+   "highlights": [
+    "15W Qi2 for iPhone",
+    "5W for Apple Watch",
+    "Compact foldable"
+   ],
+   "compatible_with": [
+    "iPhone 12",
+    "iPhone 13",
+    "iPhone 15",
+    "iPhone 16",
+    "iPhone 17"
+   ],
+   "why": [
+    "Store lists iPhone 15 as compatible",
+    "Also charges an Apple Watch"
+   ]
+  }
+ ]
+}

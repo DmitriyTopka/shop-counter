@@ -1,0 +1,116 @@
+{
+  "voices": {
+    "narrator": "Charon",
+    "maya": "Aoede",
+    "sam": "Puck",
+    "alexa": "Kore"
+  },
+  "lines": {
+    "h_maya": {
+      "voice": "maya",
+      "text": "Alexa, will this charger work with my phone?"
+    },
+    "h_alexa": {
+      "voice": "alexa",
+      "from": "maya_03"
+    },
+    "h_n": {
+      "voice": "narrator",
+      "text": "She never said which phone. Alexa remembered it, and the yes comes from the store's own product data."
+    },
+    "p_n1": {
+      "voice": "narrator",
+      "text": "We buy chargers, cables and spare parts for things we already own. We guess, and the store's chatbot guesses with us. Then the box goes back."
+    },
+    "p_n2": {
+      "voice": "narrator",
+      "text": "Shop Counter is an Alexa+ add-on that keeps a closet of your devices, and answers fit questions only with what the store itself has published."
+    },
+    "m_n0": {
+      "voice": "narrator",
+      "text": "This is the live server on AWS Lambda, with Claude Haiku playing Alexa. Maya is shopping at Satechi."
+    },
+    "m_s1": {
+      "voice": "maya",
+      "text": "I just got an iPhone 15 and a MacBook Air."
+    },
+    "m_a1": {
+      "voice": "alexa",
+      "from": "maya_01"
+    },
+    "m_s2": {
+      "voice": "maya",
+      "text": "Find me a charger."
+    },
+    "m_a2": {
+      "voice": "alexa",
+      "from": "maya_02"
+    },
+    "m_s3": {
+      "voice": "maya",
+      "text": "Will this charger work with my phone?"
+    },
+    "m_s4": {
+      "voice": "maya",
+      "text": "Order it."
+    },
+    "m_a4": {
+      "voice": "alexa",
+      "from": "maya_04"
+    },
+    "m_s5": {
+      "voice": "maya",
+      "text": "Yes, confirm."
+    },
+    "m_a5": {
+      "voice": "alexa",
+      "from": "maya_05"
+    },
+    "m_n1": {
+      "voice": "narrator",
+      "text": "Two steps. Nothing is ordered until she says yes. The next day, in a brand new session:"
+    },
+    "m_s7": {
+      "voice": "maya",
+      "text": "Where's my order?"
+    },
+    "m_a7": {
+      "voice": "alexa",
+      "from": "maya_07"
+    },
+    "s_n0": {
+      "voice": "narrator",
+      "text": "Sam mentioned his robot vacuum while shopping at Satechi. Now he's at Roborock, a different store. Same closet."
+    },
+    "s_s3": {
+      "voice": "sam",
+      "text": "What devices do I have?"
+    },
+    "s_a3": {
+      "voice": "alexa",
+      "from": "sam_03"
+    },
+    "s_s4": {
+      "voice": "sam",
+      "text": "Will the Accessories Pack for Saros 10 fit my robot?"
+    },
+    "s_a4": {
+      "voice": "alexa",
+      "from": "sam_04"
+    },
+    "t_n": {
+      "voice": "narrator",
+      "text": "Under the hood: a self-hosted MCP server on the November 2025 spec, over Streamable HTTP. MCP Apps draw the screens, an Agent Skill sets the rules, and AWS Lambda with DynamoDB keeps the closet. Fifty-seven of fifty-seven eval cases, zero made-up facts."
+    },
+    "f_n": {
+      "voice": "narrator",
+      "text": "Shop Counter. The store clerk who remembers your stuff."
+    }
+  },
+  "tempo": {
+    "narrator": 1.12,
+    "maya": 1.08,
+    "sam": 1.08,
+    "alexa": 1.28
+  }
+}

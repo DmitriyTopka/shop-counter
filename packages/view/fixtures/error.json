@@ -1,0 +1,5 @@
+{
+ "kind": "error",
+ "code": "token_expired",
+ "message": "That order confirmation expired. Say 'order it again' and I'll make a fresh one."
+}

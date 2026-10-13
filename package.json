@@ -1,0 +1,14 @@
+{
+  "name": "shop-counter-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "eval": "tsx --conditions=shelf-source evals/run.mjs"
+  }
+}

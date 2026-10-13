@@ -1,0 +1,14 @@
+*.db
+.DS_Store
+.env
+__pycache__/
+cache/
+data/state/
+dist/
+node_modules/
+venv/
+video/*.mp4
+video/frames/
+video/audio/
+video/tts.out
+video/audio_v2/

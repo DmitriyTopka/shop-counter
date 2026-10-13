@@ -1,0 +1,30 @@
+{
+  "name": "@shop-counter/echo-sim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Echo Show / Alexa+ simulator: a real MCP client (Streamable HTTP) and MCP Apps host, with a small Claude Haiku 'brain' proxy and a no-LLM fallback router.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "dev:mock": "MCP_URL=http://127.0.0.1:8797/mcp vite",
+    "brain": "node server/brain.mjs",
+    "mock": "node mock/server.mjs",
+    "build": "vite build",
+    "test": "vitest run",
+    "shoot": "node scripts/shoot.mjs screenshots"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
+    "@modelcontextprotocol/client": "2.3.1",
+    "@modelcontextprotocol/core": "2.3.1",
+    "@modelcontextprotocol/ext-apps": "2.0.3",
+    "@modelcontextprotocol/node": "2.1.1",
+    "@modelcontextprotocol/server": "2.3.1",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}

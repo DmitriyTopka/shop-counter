@@ -1,0 +1,33 @@
+{
+  "name": "shelf-to-alexa",
+  "version": "0.1.0",
+  "description": "Turn any Shopify storefront feed into an honest shop-assistant MCP server for Alexa+ and other MCP hosts.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "shelf-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src", "README.md"],
+  "keywords": ["mcp", "alexa", "shopify", "ecommerce", "mcp-apps"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/core": "2.3.1",
+    "@modelcontextprotocol/ext-apps": "2.0.3",
+    "@modelcontextprotocol/server": "2.3.1",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}

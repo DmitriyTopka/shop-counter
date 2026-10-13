@@ -1,0 +1,13 @@
+export * from './types.js';
+export { shopifyCatalog, staticCatalog, type CatalogSource, type LoadedCatalog } from './catalog.js';
+export { loadRawFeed, fetchAllProducts, cacheFileFor, DEFAULT_USER_AGENT, DEFAULT_TTL_MS, type ShopifyProduct, type ShopifyVariant, type RawFeed, type FetchFeedOptions } from './shopify.js';
+export { buildCatalog, normalizeProduct, toProduct, sizedImage, CARD_IMAGE_WIDTH, type Catalog, type CatalogItem, type CatalogVariant } from './normalize.js';
+export { extractFeatures, extractDeviceEvidence, highlightsFrom, findLiteral, findNegative, negatedAt, classifyItem, type ItemKind, type Offer, type Features, type SourceText, type DeviceEvidence } from './extract.js';
+export { findDevices, parseDevice, devicesInText, deviceMatch, type DeviceInfo, type DeviceMention, type MatchLevel } from './devices.js';
+export { search, buildIndex, tokenize, budgetFromText, coverageFor, correctTypos, type SearchQuery, type SearchHit, type SearchOutcome } from './search.js';
+export { checkCompat, type CompatVerdict } from './compat.js';
+export { signOrderToken, verifyOrderToken, newNonce, TOKEN_TTL_MS, type OrderTokenPayload, type TokenCheck } from './token.js';
+export { FileStateStore, MemoryStateStore, emptyState, type StateStore, type ShopperState } from './state.js';
+export { ShelfService, ANONYMOUS, spokenTitle, type ShelfServiceConfig, type ToolOutcome, type Notifier } from './service.js';
+export { createShelfServer, sanitizeUserId, DEFAULT_VIEW_URI, FALLBACK_VIEW_HTML, type ShelfServerOptions, type RequestContext } from './server.js';
+export { htmlToText, speakable } from './text.js';

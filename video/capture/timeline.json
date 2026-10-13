@@ -1,0 +1,326 @@
+[
+  {
+    "segment": "hook_ask",
+    "start": 0.0,
+    "seconds": 3.41,
+    "lines": [
+      {
+        "key": "h_maya",
+        "voice": "maya",
+        "text": "Alexa, will this charger work with my phone?"
+      }
+    ]
+  },
+  {
+    "segment": "hook_say",
+    "start": 3.4,
+    "seconds": 7.74,
+    "lines": [
+      {
+        "key": "h_alexa",
+        "voice": "alexa",
+        "text": "Yes, the store confirms the iPhone 15 works with the OntheGo 67W Slim Wall Charger. Want me to check it for your MacBook Air too?"
+      }
+    ]
+  },
+  {
+    "segment": "hook_title",
+    "start": 11.13,
+    "seconds": 6.39,
+    "lines": [
+      {
+        "key": "h_n",
+        "voice": "narrator",
+        "text": "She never said which phone. Alexa remembered it, and the yes comes from the store's own product data."
+      }
+    ]
+  },
+  {
+    "segment": "problem",
+    "start": 17.53,
+    "seconds": 10.23,
+    "lines": [
+      {
+        "key": "p_n1",
+        "voice": "narrator",
+        "text": "We buy chargers, cables and spare parts for things we already own. We guess, and the store's chatbot guesses with us. Then the box goes back."
+      }
+    ]
+  },
+  {
+    "segment": "what",
+    "start": 27.77,
+    "seconds": 8.97,
+    "lines": [
+      {
+        "key": "p_n2",
+        "voice": "narrator",
+        "text": "Shop Counter is an Alexa+ add-on that keeps a closet of your devices, and answers fit questions only with what the store itself has published."
+      }
+    ]
+  },
+  {
+    "segment": "m_home",
+    "start": 36.73,
+    "seconds": 6.98,
+    "lines": [
+      {
+        "key": "m_n0",
+        "voice": "narrator",
+        "text": "This is the live server on AWS Lambda, with Claude Haiku playing Alexa. Maya is shopping at Satechi."
+      }
+    ]
+  },
+  {
+    "segment": "m01_ask",
+    "start": 43.7,
+    "seconds": 3.87,
+    "lines": [
+      {
+        "key": "m_s1",
+        "voice": "maya",
+        "text": "I just got an iPhone 15 and a MacBook Air."
+      }
+    ]
+  },
+  {
+    "segment": "m01_say",
+    "start": 47.57,
+    "seconds": 9.56,
+    "lines": [
+      {
+        "key": "m_a1",
+        "voice": "alexa",
+        "text": "Got it, I've saved your iPhone 15 and MacBook Air. Satechi lists the USB-C to USB-C Cable for your MacBook Air, at $8.99."
+      }
+    ]
+  },
+  {
+    "segment": "m02_ask",
+    "start": 57.13,
+    "seconds": 2.19,
+    "lines": [
+      {
+        "key": "m_s2",
+        "voice": "maya",
+        "text": "Find me a charger."
+      }
+    ]
+  },
+  {
+    "segment": "m02_say",
+    "start": 59.33,
+    "seconds": 8.78,
+    "lines": [
+      {
+        "key": "m_a2",
+        "voice": "alexa",
+        "text": "The best fit is the OntheGo 67W Slim Wall Charger at $59.99, and the store lists it for your iPhone 15 and MacBook Air. Want me to compare it with the other two?"
+      }
+    ]
+  },
+  {
+    "segment": "m03_ask",
+    "start": 68.1,
+    "seconds": 2.53,
+    "lines": [
+      {
+        "key": "m_s3",
+        "voice": "maya",
+        "text": "Will this charger work with my phone?"
+      }
+    ]
+  },
+  {
+    "segment": "m03_say",
+    "start": 70.63,
+    "seconds": 2.4,
+    "lines": []
+  },
+  {
+    "segment": "m04_ask",
+    "start": 73.03,
+    "seconds": 1.61,
+    "lines": [
+      {
+        "key": "m_s4",
+        "voice": "maya",
+        "text": "Order it."
+      }
+    ]
+  },
+  {
+    "segment": "m04_say",
+    "start": 74.63,
+    "seconds": 6.38,
+    "lines": [
+      {
+        "key": "m_a4",
+        "voice": "alexa",
+        "text": "That's the OntheGo 67W Slim Wall Charger, $59.99 before shipping and tax. Should I place the order?"
+      }
+    ]
+  },
+  {
+    "segment": "m05_ask",
+    "start": 81.0,
+    "seconds": 1.8,
+    "lines": [
+      {
+        "key": "m_s5",
+        "voice": "maya",
+        "text": "Yes, confirm."
+      }
+    ]
+  },
+  {
+    "segment": "m05_say",
+    "start": 82.8,
+    "seconds": 7.71,
+    "lines": [
+      {
+        "key": "m_a5",
+        "voice": "alexa",
+        "text": "Your order SC-A131E6 is confirmed for $59.99. It's a demo, so no payment was taken."
+      }
+    ]
+  },
+  {
+    "segment": "m05_clean",
+    "start": 90.5,
+    "seconds": 6.27,
+    "lines": [
+      {
+        "key": "m_n1",
+        "voice": "narrator",
+        "text": "Two steps. Nothing is ordered until she says yes. The next day, in a brand new session:"
+      }
+    ]
+  },
+  {
+    "segment": "m07_ask",
+    "start": 96.77,
+    "seconds": 2.0,
+    "lines": [
+      {
+        "key": "m_s7",
+        "voice": "maya",
+        "text": "Where's my order?"
+      }
+    ]
+  },
+  {
+    "segment": "m07_say",
+    "start": 98.77,
+    "seconds": 8.23,
+    "lines": [
+      {
+        "key": "m_a7",
+        "voice": "alexa",
+        "text": "Your latest order for the OntheGo 67W Slim Wall Charger is confirmed and expected by October 16. That date is a demo estimate."
+      }
+    ]
+  },
+  {
+    "segment": "s_satechi",
+    "start": 107.0,
+    "seconds": 6.64,
+    "lines": [
+      {
+        "key": "s_n0",
+        "voice": "narrator",
+        "text": "Sam mentioned his robot vacuum while shopping at Satechi. Now he's at Roborock, a different store. Same closet."
+      }
+    ]
+  },
+  {
+    "segment": "s_switch",
+    "start": 113.63,
+    "seconds": 1.8,
+    "lines": []
+  },
+  {
+    "segment": "s03_ask",
+    "start": 115.43,
+    "seconds": 2.21,
+    "lines": [
+      {
+        "key": "s_s3",
+        "voice": "sam",
+        "text": "What devices do I have?"
+      }
+    ]
+  },
+  {
+    "segment": "s03_say",
+    "start": 117.63,
+    "seconds": 9.92,
+    "lines": [
+      {
+        "key": "s_a3",
+        "voice": "alexa",
+        "text": "You have a Roborock Saros 10R, and you have a cat on file. The store lists a Roborock Main Brush Cover for the Saros 10R at $19.99."
+      }
+    ]
+  },
+  {
+    "segment": "s04_ask",
+    "start": 127.57,
+    "seconds": 3.78,
+    "lines": [
+      {
+        "key": "s_s4",
+        "voice": "sam",
+        "text": "Will the Accessories Pack for Saros 10 fit my robot?"
+      }
+    ]
+  },
+  {
+    "segment": "s04_say",
+    "start": 131.33,
+    "seconds": 9.83,
+    "lines": [
+      {
+        "key": "s_a4",
+        "voice": "alexa",
+        "text": "No, the Accessories Pack for Saros 10 won't work with your Saros 10R, and it's out of stock anyway. The store lists a Main Brush Cover for your Saros 10R at $19.99."
+      }
+    ]
+  },
+  {
+    "segment": "s04_clean",
+    "start": 141.17,
+    "seconds": 2.2,
+    "lines": []
+  },
+  {
+    "segment": "tech_log",
+    "start": 143.37,
+    "seconds": 7.13,
+    "lines": [
+      {
+        "key": "t_n",
+        "voice": "narrator",
+        "text": "Under the hood: a self-hosted MCP server on the November 2025 spec, over Streamable HTTP. MCP Apps draw the screens, an Agent Skill sets the rules, and AWS Lambda with DynamoDB keeps the closet. Fifty-seven of fifty-seven eval cases, zero made-up facts."
+      }
+    ]
+  },
+  {
+    "segment": "tech",
+    "start": 150.5,
+    "seconds": 9.31,
+    "lines": []
+  },
+  {
+    "segment": "final",
+    "start": 159.8,
+    "seconds": 5.89,
+    "lines": [
+      {
+        "key": "f_n",
+        "voice": "narrator",
+        "text": "Shop Counter. The store clerk who remembers your stuff."
+      }
+    ]
+  }
+]

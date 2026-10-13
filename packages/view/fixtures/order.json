@@ -1,0 +1,40 @@
+{
+ "kind": "order",
+ "order": {
+  "id": "SC-10482",
+  "status": "confirmed",
+  "created_at": "2026-10-12T18:31:00Z",
+  "eta": "Fri, Oct 16",
+  "items": [
+   {
+    "product": {
+     "id": "42224142909558",
+     "handle": "roborock-q10-s5-plus",
+     "title": "Roborock Q10 S5+ with Auto-Empty Dock",
+     "vendor": "Roborock",
+     "price": 279.99,
+     "currency": "USD",
+     "compare_at_price": 549.99,
+     "available": true,
+     "image": "https://cdn.shopify.com/s/files/1/0082/3666/2902/files/Talc_B_Set_cef1f1b2-9cfe-4fc6-a4f7-f622b68bfc57.jpg?v=1761973197",
+     "url": "https://us.roborock.com/products/roborock-q10-s5-plus",
+     "highlights": [
+      "10,000 Pa suction",
+      "Auto-empty dock",
+      "Dual anti-tangle system"
+     ],
+     "compatible_with": [],
+     "why": [
+      "Store says it 'prevents hair clogs'",
+      "Empties itself, less fur handling for you"
+     ]
+    },
+    "qty": 1,
+    "line_total": 279.99
+   }
+  ],
+  "total": 279.99,
+  "currency": "USD",
+  "payment": "simulated (Amazon Wallet style)"
+ }
+}

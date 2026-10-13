@@ -1,0 +1,38 @@
+{
+ "kind": "compat",
+ "product": {
+  "id": "40908702089304",
+  "handle": "2-in-1-foldable-qi2-wireless-charging-stand",
+  "title": "2-in-1 Foldable Qi2 Wireless Charging Stand",
+  "vendor": "Satechi",
+  "price": 79.99,
+  "currency": "USD",
+  "compare_at_price": null,
+  "available": true,
+  "image": "https://cdn.shopify.com/s/files/1/1520/4366/files/2-in-1-foldable-qi2-wireless-charging-stand-wireless-chargers-satechi-136236.png?v=1762441533",
+  "url": "https://satechi.com/products/2-in-1-foldable-qi2-wireless-charging-stand",
+  "highlights": [
+   "15W Qi2 for iPhone",
+   "5W for AirPods",
+   "Folds flat for travel"
+  ],
+  "compatible_with": [
+   "iPhone 12",
+   "iPhone 13",
+   "iPhone 15",
+   "iPhone 16",
+   "iPhone 17"
+  ],
+  "why": [
+   "Store lists iPhone 15 as compatible",
+   "Folds flat, good for your nightstand or bag"
+  ]
+ },
+ "device": "iPhone 15",
+ "status": "confirmed",
+ "evidence": {
+  "source": "tags",
+  "quote": "iPhone 15"
+ },
+ "alternatives": []
+}

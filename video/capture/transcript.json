@@ -1,0 +1,176 @@
+{
+  "maya": {
+    "device": {
+      "x": 200,
+      "y": 168.875,
+      "width": 1120,
+      "height": 645.65625
+    },
+    "flow": [
+      {
+        "key": "maya_01",
+        "shopper": "I just got an iPhone 15 and a MacBook Air",
+        "alexa": "Got it, I've saved your iPhone 15 and MacBook Air. Satechi lists the USB-C to USB-C Cable for your MacBook Air, at $8.99.",
+        "model_text": "Got it, I've saved your iPhone 15 and MacBook Air. Satechi lists the USB-C to USB-C Cable for your MacBook Air, at $8.99. Want me to find a charger for them?",
+        "tools": [
+          {
+            "name": "remember_my_devices",
+            "input": {
+              "devices": [
+                "iPhone 15",
+                "MacBook Air"
+              ]
+            }
+          }
+        ],
+        "llm_ok": true
+      },
+      {
+        "key": "maya_02",
+        "shopper": "Find me a charger",
+        "alexa": "The best fit is the OntheGo 67W Slim Wall Charger at $59.99, and the store lists it for your iPhone 15 and MacBook Air. Want me to compare it with the other two?",
+        "model_text": "The best fit is the OntheGo 67W Slim Wall Charger at $59.99, and the store lists it for your iPhone 15 and MacBook Air. Want me to compare it with the other two?",
+        "tools": [
+          {
+            "name": "find_products",
+            "input": {
+              "need": "charger for my iPhone 15 and MacBook Air",
+              "category": "Wall Chargers"
+            }
+          }
+        ],
+        "llm_ok": true
+      },
+      {
+        "key": "maya_03",
+        "shopper": "Will this charger work with my phone?",
+        "alexa": "Yes, the store confirms the iPhone 15 works with the OntheGo 67W Slim Wall Charger. Want me to check it for your MacBook Air too?",
+        "model_text": "Yes, the store confirms the iPhone 15 works with the OntheGo 67W Slim Wall Charger. Want me to check it for your MacBook Air too?",
+        "tools": [
+          {
+            "name": "check_compatibility",
+            "input": {
+              "product_id": "43950442643544",
+              "device": "iPhone 15"
+            }
+          }
+        ],
+        "llm_ok": true
+      },
+      {
+        "key": "maya_04",
+        "shopper": "Order it",
+        "alexa": "That's the OntheGo 67W Slim Wall Charger, $59.99 before shipping and tax. Should I place the order?",
+        "model_text": "That's the OntheGo 67W Slim Wall Charger, $59.99 before shipping and tax. Should I place the order?",
+        "tools": [
+          {
+            "name": "prepare_order",
+            "input": {
+              "items": [
+                {
+                  "id": "43950442643544",
+                  "qty": 1
+                }
+              ]
+            }
+          }
+        ],
+        "llm_ok": true
+      },
+      {
+        "key": "maya_05",
+        "shopper": "Yes, confirm",
+        "alexa": "Your order SC-A131E6 is confirmed for $59.99. It's a demo, so no payment was taken.",
+        "model_text": "Your order SC-A131E6 is confirmed for $59.99. It's a demo, so no payment was taken.",
+        "tools": [
+          {
+            "name": "place_order",
+            "input": {
+              "confirmation_token": "eyJ2IjoxLCJ1IjoiZGVtby1tYXlhIiwicyI6InNhdGVjaGkiLCJpIjpbWyI0Mzk1MDQ0MjY0MzU0NCIsMV1dLCJ0Ijo1OTk5LCJlIjoxNzkxODMwMjk5MTk2LCJuIjoiYVozeTh1RVRKY0RqIn0.pDICPoGoT-fYmiMdprwP9c4_Jm6_I7wAoSH6Kjd65mg"
+            }
+          }
+        ],
+        "llm_ok": true
+      },
+      {
+        "key": "maya_07",
+        "shopper": "Where's my order?",
+        "alexa": "Your latest order for the OntheGo 67W Slim Wall Charger is confirmed and expected by October 16. That date is a demo estimate.",
+        "model_text": "Your latest order for the OntheGo 67W Slim Wall Charger is confirmed and expected by October 16. That date is a demo estimate.",
+        "tools": [
+          {
+            "name": "order_status",
+            "input": {}
+          }
+        ],
+        "llm_ok": true
+      }
+    ]
+  },
+  "sam": {
+    "device": {
+      "x": 400,
+      "y": 189.671875,
+      "width": 1120,
+      "height": 645.65625
+    },
+    "flow": [
+      {
+        "key": "sam_01",
+        "shopper": "I have a Roborock Saros 10R and a cat",
+        "alexa": "Got it, I've saved your Roborock Saros 10R and your cat. What would you like to find for them?",
+        "model_text": "Got it, I've saved your Roborock Saros 10R and your cat. What would you like to find for them?",
+        "tools": [
+          {
+            "name": "remember_my_devices",
+            "input": {
+              "devices": [
+                "Roborock Saros 10R"
+              ],
+              "home": {
+                "pets": [
+                  "cat"
+                ]
+              }
+            }
+          }
+        ],
+        "llm_ok": true
+      },
+      {
+        "key": "sam_03",
+        "shopper": "What devices do I have?",
+        "alexa": "You have a Roborock Saros 10R, and you have a cat on file. The store lists a Roborock Main Brush Cover for the Saros 10R at $19.99.",
+        "model_text": "You have a Roborock Saros 10R, and you have a cat on file. The store lists a Roborock Main Brush Cover for the Saros 10R at $19.99.",
+        "tools": [
+          {
+            "name": "my_devices",
+            "input": {}
+          }
+        ],
+        "llm_ok": true
+      },
+      {
+        "key": "sam_04",
+        "shopper": "Will the Accessories Pack for Saros 10 fit my robot?",
+        "alexa": "No, the Accessories Pack for Saros 10 won't work with your Saros 10R, and it's out of stock anyway. The store lists a Main Brush Cover for your Saros 10R at $19.99.",
+        "model_text": "No, the Accessories Pack for Saros 10 won't work with your Saros 10R, and it's out of stock anyway. The store lists a Main Brush Cover for your Saros 10R at $19.99.",
+        "tools": [
+          {
+            "name": "find_products",
+            "input": {
+              "need": "Accessories Pack for Saros 10"
+            }
+          },
+          {
+            "name": "check_compatibility",
+            "input": {
+              "product_id": "42226657362038"
+            }
+          }
+        ],
+        "llm_ok": true
+      }
+    ]
+  }
+}
