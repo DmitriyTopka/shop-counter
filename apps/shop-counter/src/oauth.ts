@@ -17,6 +17,8 @@
  * Framework-free: http.ts and lambda.ts both call `handle()`.
  */
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import type { StateStore } from 'shelf-to-alexa';
 
 export const SCOPE = 'shopper';
@@ -54,6 +56,8 @@ export interface OAuthDeps {
   shopperFor: (choice: string) => string | null;
   /** Fetch for Client ID Metadata Documents (injectable for tests). */
   fetchFn?: typeof fetch;
+  /** DNS lookup for the CIMD host (injectable for tests). Default: the system resolver; skipped when only fetchFn is injected. */
+  lookupFn?: (host: string) => Promise<string[]>;
   log?: (msg: string, extra?: Record<string, unknown>) => void;
 }
 
@@ -131,6 +135,25 @@ const PAGE_HEADERS = {
 };
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+const MAX_CIMD = 5000;
+
+/** True for loopback, private, link-local, CGNAT, multicast, unspecified and IPv6 ULA / mapped-private addresses. */
+export function privateAddress(ip: string): boolean {
+  const v = isIP(ip);
+  if (v === 4) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
+  }
+  if (v === 6) {
+    const x = ip.toLowerCase();
+    const mapped = x.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return privateAddress(mapped[1]);
+    return x === '::' || x === '::1' || x.startsWith('fc') || x.startsWith('fd') || x.startsWith('fe8') || x.startsWith('fe9')
+      || x.startsWith('fea') || x.startsWith('feb') || x.startsWith('ff');
+  }
+  return true;
+}
 /** MCP spec: redirect URIs are https or localhost. No fragments. */
 function redirectUriOk(raw: unknown): raw is string {
   if (typeof raw !== 'string' || raw.length > 512) return false;
@@ -168,6 +191,7 @@ export interface OAuthServer {
 export function createOAuth(deps: OAuthDeps): OAuthServer {
   const { secret, state } = deps;
   const fetchFn = deps.fetchFn ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
+  const lookupFn = deps.lookupFn ?? (deps.fetchFn ? null : async (h: string) => (await lookup(h, { all: true })).map((r) => r.address));
   const log = deps.log ?? (() => {});
   const mcpPaths = ['/mcp', ...deps.storeIds.map((id) => `/stores/${id}/mcp`)];
   const cimdCache = new Map<string, { client: Client; until: number }>();
@@ -231,10 +255,37 @@ export function createOAuth(deps: OAuthDeps): OAuthServer {
       return { error: 'client_id must be a public https URL with a path' };
     }
     try {
-      const res = await fetchFn(url, { redirect: 'error', signal: AbortSignal.timeout(3000), headers: { accept: 'application/json' } });
-      if (!res.ok) return { error: `client metadata document: HTTP ${res.status}` };
-      const text = await res.text();
-      if (text.length > 5000) return { error: 'client metadata document too large' };
+      // SSRF guard: every address the host resolves to must be public. (A DNS answer that changes between this
+      // check and the fetch can still slip through; the fetch only reads 5 KB of JSON and never forwards it.)
+      if (lookupFn) {
+        const addrs = await lookupFn(host);
+        if (!addrs.length || addrs.some(privateAddress)) return { error: 'client_id must be a public https URL with a path' };
+      }
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 3000);
+      let text = '';
+      try {
+        const res = await fetchFn(url, { redirect: 'error', signal: ctl.signal, headers: { accept: 'application/json', 'accept-encoding': 'identity' } });
+        if (!res.ok) return { error: 'client metadata document could not be fetched' };
+        if (Number(res.headers?.get?.('content-length') ?? 0) > MAX_CIMD) return { error: 'client metadata document too large' };
+        // Read at most MAX_CIMD bytes, then stop the download: a huge body never gets buffered.
+        const reader = res.body?.getReader();
+        if (reader) {
+          const chunks: Uint8Array[] = [];
+          let size = 0;
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            size += value.byteLength;
+            if (size > MAX_CIMD) { ctl.abort(); return { error: 'client metadata document too large' }; }
+            chunks.push(value);
+          }
+          text = Buffer.concat(chunks).toString('utf8');
+        } else {
+          text = await res.text();
+          if (text.length > MAX_CIMD) return { error: 'client metadata document too large' };
+        }
+      } finally { clearTimeout(timer); }
       const doc = JSON.parse(text) as { client_id?: unknown; client_name?: unknown; redirect_uris?: unknown };
       if (doc.client_id !== url) return { error: 'client metadata document: client_id does not match its URL' };
       if (typeof doc.client_name !== 'string' || !Array.isArray(doc.redirect_uris) || !doc.redirect_uris.length || !doc.redirect_uris.every(redirectUriOk)) {

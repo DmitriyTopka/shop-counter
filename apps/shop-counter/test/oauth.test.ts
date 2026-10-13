@@ -14,7 +14,7 @@ process.env.SHOP_COUNTER_CACHE_DIR = join(dir, 'cache');
 delete process.env.PUBLIC_BASE_URL;
 globalThis.fetch = async () => { throw new Error('offline test: no network'); };
 const { handler } = await import('../src/lambda.js');
-const { createOAuth, pkceChallenge } = await import('../src/oauth.js');
+const { createOAuth, pkceChallenge, privateAddress } = await import('../src/oauth.js');
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 const HOST = 'shop.example.aws';
@@ -239,5 +239,20 @@ describe('Client ID Metadata Documents', () => {
     for (const bad of ['https://127.0.0.1/c.json', 'https://localhost/c.json', 'https://example.com/']) {
       expect((await oauth.handle(req('GET', '/authorize', { ...q, client_id: bad })))!.status).toBe(400);
     }
+  });
+  it('refuses hosts that resolve to private addresses, and bodies over 5 KB without buffering them', async () => {
+    const q = { response_type: 'code', client_id: CID, redirect_uri: 'https://alexa.example.com/cb', code_challenge: 'x'.repeat(43), code_challenge_method: 'S256' };
+    const base = { secret: 's', state: new MemoryStateStore(), storeIds: ['satechi'], signAccess: (u: string, a: string) => `tok:${u}:${a}`, shopperFor: () => null };
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify(doc), { status: 200 }));
+    const rebind = createOAuth({ ...base, fetchFn: fetchFn as unknown as typeof fetch, lookupFn: async () => ['93.184.216.34', '10.0.0.5'] });
+    expect((await rebind.handle(req('GET', '/authorize', q)))!.status).toBe(400);
+    expect(fetchFn).not.toHaveBeenCalled();
+    let pulled = 0;
+    const huge = new ReadableStream<Uint8Array>({ pull(c) { pulled++; c.enqueue(new Uint8Array(4096)); } });
+    const big = createOAuth({ ...base, lookupFn: async () => ['93.184.216.34'], fetchFn: (async () => new Response(huge, { status: 200 })) as unknown as typeof fetch });
+    expect((await big.handle(req('GET', '/authorize', q)))!.body).toContain('too large');
+    expect(pulled).toBeLessThan(5);
+    for (const ip of ['127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '::1', 'fd00::1', 'fe80::1', '::ffff:10.0.0.1']) expect(privateAddress(ip)).toBe(true);
+    for (const ip of ['93.184.216.34', '8.8.8.8', '2606:4700::1111']) expect(privateAddress(ip)).toBe(false);
   });
 });

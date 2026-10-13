@@ -7,6 +7,7 @@
   (Roborock: `/stores/roborock/mcp`, health: `/health`)
 - **Demo video (2:52):** https://youtu.be/KcCVoWnQfLI
 - **How it was built, day by day:** [docs/BUILD_LOG.md](docs/BUILD_LOG.md)
+- **The library on its own (MIT):** [shelf-to-alexa](https://github.com/DmitriyTopka/shelf-to-alexa) turns any Shopify catalog into the same 9 MCP tools with one command
 
 The Alexa+ MCP toolkit is closed to participants, so the repo ships a real MCP client standing in for Alexa:
 an Echo Show simulator (`apps/echo-sim`) that speaks MCP over Streamable HTTP and hosts the MCP App screens.
