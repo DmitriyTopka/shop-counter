@@ -6,29 +6,21 @@
     "alexa": "Kore"
   },
   "lines": {
-    "h_maya": {
-      "voice": "maya",
-      "text": "Alexa, will this charger work with my phone?"
+    "h_sam": {
+      "voice": "sam",
+      "text": "Will the Accessories Pack for Saros 10 fit my robot?"
     },
     "h_alexa": {
       "voice": "alexa",
-      "from": "maya_03"
+      "from": "sam_02"
     },
-    "h_n": {
+    "c_n": {
       "voice": "narrator",
-      "text": "She never said which phone. Alexa remembered it, and the yes comes from the store's own product data."
-    },
-    "p_n1": {
-      "voice": "narrator",
-      "text": "We buy chargers, cables and spare parts for things we already own. We guess, and the store's chatbot guesses with us. Then the box goes back."
-    },
-    "p_n2": {
-      "voice": "narrator",
-      "text": "Shop Counter is an Alexa+ add-on that keeps a closet of your devices, and answers fit questions only with what the store itself has published."
+      "text": "Will it work with what I already own? Shop Counter is an Alexa+ add-on. Alexa understands what you mean, and the store answers for the facts."
     },
     "m_n0": {
       "voice": "narrator",
-      "text": "This is the live server on AWS Lambda, with Claude Haiku playing Alexa. Maya is shopping at Satechi."
+      "text": "The Alexa+ MCP toolkit isn't open to hackathon builders, so this Echo Show is our own real MCP client, live on AWS. Maya shops at Satechi."
     },
     "m_s1": {
       "voice": "maya",
@@ -50,6 +42,10 @@
       "voice": "maya",
       "text": "Will this charger work with my phone?"
     },
+    "m_a3": {
+      "voice": "alexa",
+      "from": "maya_03"
+    },
     "m_s4": {
       "voice": "maya",
       "text": "Order it."
@@ -58,9 +54,9 @@
       "voice": "alexa",
       "from": "maya_04"
     },
-    "m_s5": {
-      "voice": "maya",
-      "text": "Yes, confirm."
+    "m_n_tap": {
+      "voice": "narrator",
+      "text": "Voice first, not voice only. She taps Place order on the screen."
     },
     "m_a5": {
       "voice": "alexa",
@@ -68,7 +64,7 @@
     },
     "m_n1": {
       "voice": "narrator",
-      "text": "Two steps. Nothing is ordered until she says yes. The next day, in a brand new session:"
+      "text": "Later, in a brand new session:"
     },
     "m_s7": {
       "voice": "maya",
@@ -78,39 +74,45 @@
       "voice": "alexa",
       "from": "maya_07"
     },
+    "l_n": {
+      "voice": "narrator",
+      "text": "Account linking is real OAuth 2.1 with PKCE, the way Alexa+ links accounts."
+    },
     "s_n0": {
       "voice": "narrator",
-      "text": "Sam mentioned his robot vacuum while shopping at Satechi. Now he's at Roborock, a different store. Same closet."
+      "text": "Remember Sam from the start? Earlier, at Satechi, he told Alexa about his robot."
     },
-    "s_s3": {
+    "s_s1": {
       "voice": "sam",
-      "text": "What devices do I have?"
+      "text": "I have a Roborock Saros 10R and an iPhone 16."
     },
-    "s_a3": {
+    "s_a1": {
       "voice": "alexa",
-      "from": "sam_03"
+      "from": "sam_01"
     },
-    "s_s4": {
+    "s_n1": {
+      "voice": "narrator",
+      "text": "Now he's at Roborock, a different store."
+    },
+    "s_s2": {
       "voice": "sam",
       "text": "Will the Accessories Pack for Saros 10 fit my robot?"
     },
-    "s_a4": {
-      "voice": "alexa",
-      "from": "sam_04"
-    },
-    "t_n": {
+    "s_n2": {
       "voice": "narrator",
-      "text": "Under the hood: a self-hosted MCP server on the November 2025 spec, over Streamable HTTP. MCP Apps draw the screens, an Agent Skill sets the rules, and AWS Lambda with DynamoDB keeps the closet. Fifty-seven of fifty-seven eval cases, zero made-up facts."
+      "text": "He only said “my robot”. Alexa knew it was his Saros 10R, and the no is the store's own words."
+    },
+    "t_n1": {
+      "voice": "narrator",
+      "text": "Under the hood, every step is real JSON-RPC. Alexa passes “my robot” as it was said, and our MCP server on AWS Lambda finds the Saros 10R in the closet, kept in DynamoDB."
+    },
+    "t_n2": {
+      "voice": "narrator",
+      "text": "MCP Apps draw the screens, and an Agent Skill sets the rules. Eighty-one of eighty-one eval cases pass, with zero made-up facts."
     },
     "f_n": {
       "voice": "narrator",
-      "text": "Shop Counter. The store clerk who remembers your stuff."
+      "text": "Try it yourself, the link is on screen. Shop Counter: the store clerk who remembers your stuff."
     }
-  },
-  "tempo": {
-    "narrator": 1.12,
-    "maya": 1.08,
-    "sam": 1.08,
-    "alexa": 1.28
   }
 }

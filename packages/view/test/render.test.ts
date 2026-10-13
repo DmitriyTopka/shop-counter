@@ -119,7 +119,9 @@ describe('compat', () => {
   it('confirmed shows the literal quote and its source', () => {
     const { el, text } = draw(fx('compat'));
     expect(el.classList.contains('ok')).toBe(true);
-    expect(text).toContain('Works with iPhone 15');
+    expect(text).toContain('Listed for iPhone 15');
+    expect(text).toContain('The store lists it');
+    expect(text).not.toMatch(/Confirmed by the store/);
     expect(el.querySelector('blockquote')!.textContent).toBe('iPhone 15');
     expect(text).toContain('store compatibility tags');
   });
@@ -131,6 +133,14 @@ describe('compat', () => {
     expect(el.querySelectorAll('.alt')).toHaveLength(2);
     await click(el.querySelector('.alt .btn'));
     expect(host.callTool).toHaveBeenCalledWith('prepare_order', { items: [{ id: '40908702089304', qty: 1 }] });
+  });
+  it('family_only says the store lists the series, not this model', () => {
+    const sc = { ...fx('compat'), device: 'iPhone 17 Pro', device_source: 'closet', status: 'family_only', evidence: { source: 'tags', quote: 'iPhone 17' }, alternatives: [] };
+    const { el, text } = draw(sc);
+    expect(el.classList.contains('warn')).toBe(true);
+    expect(text).toContain('Not listed for your iPhone 17 Pro specifically');
+    expect(text).toContain('The store lists iPhone 17, not this exact model');
+    expect(el.querySelector('.actions')).toBeNull(); // no Add to cart on a series-only listing
   });
   it('incompatible is red', () => {
     expect(draw(fx('compat_incompatible')).el.classList.contains('bad')).toBe(true);
@@ -222,6 +232,18 @@ describe('other kinds', () => {
     expect(text).toContain('My devices');
     expect(text).toContain('Pets: cat');
   });
+  it('closet icons follow the device kind', () => {
+    const sc = { ...fx('closet'), devices: ['iPhone 17 Pro', 'MacBook Pro 2017 Intel', 'Roborock Saros 10R'], items: [{ name: 'iPhone 17 Pro', kind: 'phone' }, { name: 'MacBook Pro 2017 Intel', kind: 'laptop' }, { name: 'Roborock Saros 10R', kind: 'robot' }] };
+    const icons = [...draw(sc).el.querySelectorAll('.devices li')].map((li) => li.getAttribute('data-icon'));
+    expect(icons).toEqual(['device', 'laptop', 'robot']);
+    // Older answers without kinds: guessed from the name, a vacuum never gets a phone icon.
+    expect([...draw(fx('closet')).el.querySelectorAll('.devices li')].map((li) => li.getAttribute('data-icon'))).toEqual(['device', 'laptop', 'earbuds', 'plug']);
+  });
+  it('device_ambiguous asks which one and lists the options', () => {
+    const el = renderResult(res({ kind: 'error', code: 'device_ambiguous', message: 'Which phone should I check: your iPhone 15 or Galaxy S24?', options: ['iPhone 15', 'Galaxy S24'] }), mkHost());
+    expect(el.textContent).toContain('Which one?');
+    expect(el.querySelectorAll('.devices li')).toHaveLength(2);
+  });
   it('closet tip shows the store quote and adds that product to the cart', async () => {
     const p = fx('products').products[0];
     const sc = { ...fx('closet'), store: 'Roborock', suggestion: { device: 'Q7 M5', product: p, evidence: { source: 'title', quote: p.title } } };
@@ -235,8 +257,14 @@ describe('other kinds', () => {
   it('compat from the closet says it is your remembered device', () => {
     const sc = { ...fx('compat'), device: 'iPhone 15', device_source: 'closet' };
     const { text } = draw(sc);
-    expect(text).toContain('Works with your iPhone 15');
+    expect(text).toContain('Listed for your iPhone 15');
     expect(text).toContain('Your iPhone 15 · remembered');
+  });
+  it('the remembered-device line on a verdict carries the device icon (a robot for a robot vacuum)', () => {
+    const robot = draw({ ...fx('compat'), device: 'Saros 10R', device_source: 'closet', status: 'incompatible' });
+    expect(robot.el.querySelector('.eyebrow.remembered')!.getAttribute('data-icon')).toBe('robot');
+    const phone = draw({ ...fx('compat'), device: 'iPhone 15', device_source: 'closet' });
+    expect(phone.el.querySelector('.eyebrow.remembered')!.getAttribute('data-icon')).toBe('device');
   });
   it('refurbished cards carry a badge (stores reuse the new unit photo)', () => {
     const sc = fx('products');

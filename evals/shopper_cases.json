@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Real shopper requests for Shop Counter (Satechi, Roborock). Each case: what the shopper said, the tool calls a good assistant makes (steps), what the server must answer (expect), and what the no-LLM router must pick (router). Traps come from a live shop-assistant bot (TT Bot). Facts are audited against the raw store feed on every answer. Runner: evals/run.mjs. Round 2 (2026-10-12): x-* cases cover the shopper-owned closet across stores, auth-* cases the signed session.",
+  "about": "Real shopper requests for Shop Counter (Satechi, Roborock). Each case: what the shopper said, the tool calls a good assistant makes (steps), what the server must answer (expect), and what the no-LLM router must pick (router). Traps come from a live shop-assistant bot (TT Bot). Facts are audited against the raw store feed on every answer. Runner: evals/run.mjs. Round 2 (2026-10-12): x-* cases cover the shopper-owned closet across stores, auth-* cases the signed session. Round 3 (2026-10-13): hon-* cases cover compatibility by meaning for models outside the device dictionary (model prefixes, \"only\", \"upgraded from\", series, + editions, a robot is not an accessory).",
   "cases": [
     {
       "id": "sat-01-budget-below-catalog",
@@ -1264,7 +1264,7 @@
     {
       "id": "sat-h03-pro-max-series",
       "store": "satechi",
-      "trap": "Pro Max on a product listed for the iPhone 15 series",
+      "trap": "Pro Max on a product listed for the iPhone 15 series: the series is not the model (council 2: family_only, was confirmed)",
       "utterance": "Will the OntheGo 67W work with my iPhone 15 Pro Max?",
       "setup": [
         {
@@ -1283,9 +1283,13 @@
           },
           "expect": {
             "kind": "compat",
-            "status": [
-              "confirmed",
-              "not_listed"
+            "status": "family_only",
+            "say": [
+              "not your iPhone 15 Pro Max specifically"
+            ],
+            "sayNot": [
+              "^Yes",
+              "works with"
             ]
           }
         }
@@ -1607,7 +1611,10 @@
             "status": "confirmed",
             "deviceSource": "closet",
             "say": [
-              "^Works with your iPhone 15"
+              "^The store lists your iPhone 15 for the"
+            ],
+            "sayNot": [
+              "store confirms"
             ]
           }
         }
@@ -1723,6 +1730,678 @@
           "expect": {
             "kind": "closet",
             "devicesCount": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-01-closet-pro-vs-series-tag",
+      "store": "satechi",
+      "trap": "closet iPhone 17 Pro, store tags only \"iPhone 17\": never \"works with your iPhone 17 Pro\"",
+      "utterance": "Will the OntheGo 67W charger work with my phone?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "iPhone 17 Pro"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:OntheGo.*67W Slim Wall Charger"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "family_only",
+            "deviceSource": "closet",
+            "say": [
+              "^The store lists iPhone 17, not your iPhone 17 Pro specifically"
+            ],
+            "sayNot": [
+              "works with",
+              "^Yes",
+              "store confirms"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-02-said-pro-vs-series-tag",
+      "store": "satechi",
+      "trap": "named iPhone 17 Pro against an iPhone 17 tag",
+      "utterance": "Does the OntheGo 67W work with an iPhone 17 Pro?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:OntheGo.*67W Slim Wall Charger",
+            "device": "iPhone 17 Pro"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "family_only",
+            "deviceSource": "said",
+            "say": [
+              "not your iPhone 17 Pro specifically"
+            ],
+            "sayNot": [
+              "^Yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-03-exact-model-still-confirmed",
+      "store": "satechi",
+      "trap": "the exact model the store tags stays a yes, in any spelling",
+      "utterance": "Will the OntheGo 67W work with my iphone 17?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:OntheGo.*67W Slim Wall Charger",
+            "device": "iphone 17"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "confirmed",
+            "say": [
+              "^Yes, the store lists the iPhone 17 for the"
+            ],
+            "sayNot": [
+              "store confirms"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-04-closet-keeps-full-device",
+      "store": "satechi",
+      "trap": "\"MacBook Pro 2017 Intel\" stays as said; a \"MacBook Pro\" tag is not proof for it",
+      "utterance": "I have a MacBook Pro 2017 Intel. Will the OntheGo 67W charge my laptop?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "MacBook Pro 2017 Intel"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "my_devices",
+          "args": {},
+          "newSession": true,
+          "expect": {
+            "kind": "closet",
+            "devicesHas": [
+              "MacBook Pro 2017 Intel"
+            ],
+            "devicesCount": 1
+          }
+        },
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:OntheGo.*67W Slim Wall Charger",
+            "device": "my laptop"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "family_only",
+            "deviceSource": "closet",
+            "say": [
+              "The store lists MacBook Pro, not your MacBook Pro 2017 Intel specifically"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-05-macbook-pro-chip-and-size",
+      "store": "satechi",
+      "trap": "MacBook Pro 14 M3 against a bare \"MacBook Pro\" tag",
+      "utterance": "Is the OntheGo 67W OK for my MacBook Pro 14 M3?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:OntheGo.*67W Slim Wall Charger",
+            "device": "MacBook Pro 14 M3"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "family_only",
+            "say": [
+              "not your MacBook Pro 14 M3 specifically"
+            ],
+            "sayNot": [
+              "^Yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-06-two-phones-ask-which",
+      "store": "satechi",
+      "trap": "\"my phone\" with two phones on file: ask, do not pick one silently",
+      "utterance": "Will this charger work with my phone?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "iPhone 15",
+              "Galaxy S24",
+              "MacBook Air M2"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:OntheGo.*67W Slim Wall Charger",
+            "device": "my phone"
+          },
+          "expect": {
+            "kind": "error",
+            "isError": true,
+            "code": "device_ambiguous",
+            "say": [
+              "iPhone 15 or Galaxy S24\\?$"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-07-named-pixel-beats-closet",
+      "store": "satechi",
+      "trap": "\"charger for my Pixel\" with an iPhone on file: answer about the Pixel, not the iPhone",
+      "utterance": "Find me a charger for my Pixel",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "iPhone 15"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "charger for my Pixel"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "say": [
+              "Which Pixel model do you have"
+            ],
+            "sayNot": [
+              "iPhone"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-08-named-device-compat-beats-closet",
+      "store": "satechi",
+      "trap": "a device named in check_compatibility wins over the closet",
+      "utterance": "Does the OntheGo 67W work with a Galaxy S24?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "iPhone 15"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:OntheGo.*67W Slim Wall Charger",
+            "device": "Galaxy S24"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "not_listed",
+            "deviceSource": "said",
+            "say": [
+              "Galaxy S24"
+            ],
+            "sayNot": [
+              "iPhone 15$|your iPhone 15"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-09-my-devices-no-pets-aloud",
+      "store": "satechi",
+      "trap": "home notes stay on screen: \"my devices\" does not announce the cat",
+      "utterance": "What devices do I have?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "Kindle Paperwhite"
+            ],
+            "home": {
+              "pets": [
+                "cat"
+              ]
+            }
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "my_devices",
+          "args": {},
+          "expect": {
+            "kind": "closet",
+            "say": [
+              "^You have Kindle Paperwhite"
+            ],
+            "sayNot": [
+              "cat",
+              "on file"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-10-find-says-series-only",
+      "store": "satechi",
+      "trap": "find_products never says \"listed for your iPhone 17 Pro\" off an iPhone 17 tag",
+      "utterance": "I need a wall charger for my iPhone 17 Pro",
+      "steps": [
+        {
+          "tool": "find_products",
+          "args": {
+            "need": "wall charger for my iPhone 17 Pro"
+          },
+          "expect": {
+            "kind": "products",
+            "minProducts": 1,
+            "say": [
+              "not your iPhone 17 Pro specifically"
+            ],
+            "sayNot": [
+              "lists it for your iPhone 17 Pro"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "c2-11-two-robots-ask-which",
+      "store": "roborock",
+      "trap": "\"my robot\" with two robots on file: ask which one",
+      "utterance": "Does the Saros 10 accessories pack fit my robot?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "Roborock Saros 10R",
+              "Roborock Q7 M5"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:Accessories Pack for Saros 10 \\(Not compatible",
+            "device": "my robot"
+          },
+          "expect": {
+            "kind": "error",
+            "code": "device_ambiguous",
+            "say": [
+              "^Which robot should I check"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-01-qrevo-only-is-yes",
+      "store": "roborock",
+      "trap": "\"for Qrevo only (Incompatible with other models in the Qrevo series)\": the negation is about the OTHER models (live server said no, 13.10)",
+      "utterance": "Will the Qrevo only filter fit my Qrevo?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Washable Filter\\*2 pcs for Roborock Qrevo only \\(",
+            "device": "Qrevo"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "confirmed",
+            "say": [
+              "^Yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-02-qrevo-only-no-for-qrevo-s",
+      "store": "roborock",
+      "trap": "the same \"Qrevo only\" filter for a Qrevo S: the store's own no for other Qrevo models",
+      "utterance": "Will the Qrevo only filter fit my Qrevo S?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Washable Filter\\*2 pcs for Roborock Qrevo only \\(",
+            "device": "Qrevo S"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "incompatible",
+            "say": [
+              "other models in the Qrevo series"
+            ],
+            "sayNot": [
+              "^Yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-03-curv-is-not-qrevo",
+      "store": "roborock",
+      "trap": "model prefix: \"for Qrevo Curv Series\" is not a listing for a plain Qrevo (live server said yes, 13.10)",
+      "utterance": "Do the Qrevo Curv mop cloths fit my Qrevo?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Mop Cloth\\*4pcs for Qrevo Curv Series and Qrevo Edge Series",
+            "device": "Qrevo"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": [
+              "not_listed",
+              "family_only"
+            ],
+            "sayNot": [
+              "^Yes",
+              "lists your"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-04-upgraded-from-is-not-fit",
+      "store": "roborock",
+      "trap": "\"(Upgraded from S8 MaxV Ultra)\" on a robot is its predecessor, not compatibility (live server said yes, 13.10)",
+      "utterance": "Is the Saros 10 compatible with my S8 MaxV Ultra?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Saros 10 Robot Vacuum with Dual Anti-tangle System \\(Upgraded",
+            "device": "S8 MaxV Ultra"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "not_listed",
+            "sayNot": [
+              "^Yes",
+              "lists your"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-05-curv-2-flow-is-not-curv",
+      "store": "roborock",
+      "trap": "model prefix: parts for the Qrevo Curv 2 Flow are not listed for a Qrevo Curv",
+      "utterance": "Will these side brushes fit my Qrevo Curv?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Side Brushes Replacement for Qrevo Curv 2 Flow",
+            "device": "Qrevo Curv"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "not_listed",
+            "sayNot": [
+              "^Yes",
+              "lists your"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-06-s8-pro-ultra-is-not-s8-max-ultra",
+      "store": "roborock",
+      "trap": "\"S7/S8/S8+/S8 Pro Ultra\" lists neither the S8 Max Ultra nor anything by substring",
+      "utterance": "Does this filter fit my S8 Max Ultra?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Washable Filter \\(x2\\) for Roborock S7/S8/S8\\+/S8 Pro Ultra",
+            "device": "S8 Max Ultra"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "not_listed",
+            "sayNot": [
+              "^Yes",
+              "lists your"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-07-s8-listed-in-a-slash-list",
+      "store": "roborock",
+      "trap": "the right yes stays: a two-character model in a slash list (\"S7/S8/S8+\") is a listing for the S8",
+      "utterance": "Does this filter fit my S8?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Washable Filter \\(x2\\) for Roborock S7/S8/S8\\+/S8 Pro Ultra",
+            "device": "S8"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "confirmed",
+            "say": [
+              "^Yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-08-saros-series-is-family",
+      "store": "roborock",
+      "trap": "\"Saros Series\" names the series, not the Saros 10: family answer, never a yes",
+      "utterance": "Do the dust bags fit my Saros 10?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Dust Bag\\*6pcs for S8 MaxV Ultra, S8 Max Ultra, Qrevo Series, Qrevo Curv Series, Qrevo Edge Series, Saros Series and QV Series$",
+            "device": "Saros 10"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "family_only",
+            "say": [
+              "Saros Series, not your Saros 10 specifically"
+            ],
+            "sayNot": [
+              "^Yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-09-saros-10-r-is-not-saros-10",
+      "store": "roborock",
+      "trap": "\"Saros 10 R\" (with a space) is the Saros 10R, not the Saros 10",
+      "utterance": "Does this filter fit my Saros 10?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Washable Filter\\*2 pcs for Roborock Saros 10 R and",
+            "device": "Saros 10"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "not_listed",
+            "sayNot": [
+              "^Yes",
+              "lists your"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-10-plus-edition-is-family",
+      "store": "roborock",
+      "trap": "a plan for the \"Q7 Max+\" is not a plan listed for a Q7 Max: the store names the + edition",
+      "utterance": "Does the Q7 Max+ plan cover my Q7 Max?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Q7 Max\\+ Robot 1 Year$",
+            "device": "Q7 Max"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "family_only",
+            "sayNot": [
+              "^Yes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-11-robot-is-not-an-accessory",
+      "store": "roborock",
+      "trap": "a robot whose title says \"(Upgraded from Qrevo S)\" is not an accessory for a Qrevo S",
+      "utterance": "Is the QV 35A compatible with my Qrevo S?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock QV 35A Robot Vacuum with Multifunctional Dock \\(Upgraded from Qrevo S\\)",
+            "device": "Qrevo S"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "not_listed",
+            "sayNot": [
+              "^Yes",
+              "lists your"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-12-closet-qrevo-not-curv",
+      "store": "roborock",
+      "trap": "closet device \"Roborock Qrevo\" checked without naming it: a Qrevo Curv part is still not a yes",
+      "utterance": "Do the Qrevo Curv mop cloths fit my robot?",
+      "setup": [
+        {
+          "tool": "remember_my_devices",
+          "args": {
+            "devices": [
+              "Roborock Qrevo"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Mop Cloth\\*4pcs for Qrevo Curv Series and Qrevo Edge Series"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": [
+              "not_listed",
+              "family_only"
+            ],
+            "deviceSource": "closet",
+            "sayNot": [
+              "^Yes",
+              "lists your"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "hon-13-qrevo-in-a-list-stays-yes",
+      "store": "roborock",
+      "trap": "the right yes stays: \"for Qrevo, Qrevo Pro, ...\" lists the Qrevo",
+      "utterance": "Does this brush cover fit my Qrevo?",
+      "steps": [
+        {
+          "tool": "check_compatibility",
+          "args": {
+            "product_id": "@title:^Roborock Main Brush Cover for Qrevo, Qrevo Pro, Qrevo Plus",
+            "device": "Qrevo"
+          },
+          "expect": {
+            "kind": "compat",
+            "status": "confirmed",
+            "say": [
+              "^Yes"
+            ]
           }
         }
       ]

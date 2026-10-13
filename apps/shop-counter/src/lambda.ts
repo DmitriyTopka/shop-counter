@@ -5,6 +5,8 @@
  * CORS is handled by the Function URL config, not here.
  */
 import { createApp, createStateStore, routeStore, SERVER_NAME, SERVER_VERSION, type App } from './app.js';
+import { hostedRoute } from './hosted.js';
+import { challenge, publicOrigin } from './oauth.js';
 
 interface FunctionUrlEvent {
   rawPath: string;
@@ -12,7 +14,7 @@ interface FunctionUrlEvent {
   headers: Record<string, string | undefined>;
   body?: string;
   isBase64Encoded?: boolean;
-  requestContext: { http: { method: string }; domainName?: string };
+  requestContext: { http: { method: string; sourceIp?: string }; domainName?: string };
 }
 
 interface FunctionUrlResult {
@@ -28,8 +30,11 @@ const jsonResult = (statusCode: number, body: unknown, headers: Record<string, s
   ({ statusCode, headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), isBase64Encoded: false });
 
 export async function handler(event: FunctionUrlEvent): Promise<FunctionUrlResult> {
+  // The hosted simulator (/sim/) and its Bedrock brain (/brain/...) share this origin with /mcp (hosted.ts).
+  const hosted = await hostedRoute(event);
+  if (hosted) return hosted;
   app ??= createStateStore().then((state) => createApp(undefined, state));
-  const { runtimes, identify, demoLogin } = await app;
+  const { runtimes, identify, demoLogin, oauth } = await app;
   const method = event.requestContext.http.method;
   if (event.rawPath === '/health') {
     return jsonResult(200, { ok: true, server: SERVER_NAME, version: SERVER_VERSION, stores: [...runtimes.keys()] });
@@ -41,12 +46,23 @@ export async function handler(event: FunctionUrlEvent): Promise<FunctionUrlResul
     const session = demoLogin(profile);
     return session ? jsonResult(200, session) : jsonResult(400, { error: 'unknown profile', profiles: ['maya', 'sam', 'guest'] });
   }
+  const lower = Object.fromEntries(Object.entries(event.headers).map(([k, v]) => [k.toLowerCase(), v]));
+  const origin = publicOrigin({ env: process.env.PUBLIC_BASE_URL?.trim() || undefined, lambdaDomain: event.requestContext.domainName, host: lower.host });
+  // Account linking (OAuth 2.1, see oauth.ts): metadata, /authorize, /token, /register.
+  const linked = await oauth.handle({ method, path: event.rawPath, query: new URLSearchParams(event.rawQueryString ?? ''), header: (n) => lower[n], body: rawBody, origin });
+  if (linked) return { statusCode: linked.status, headers: linked.headers, body: linked.body, isBase64Encoded: false };
+
   const rt = routeStore(event.rawPath, runtimes);
   if (!rt) return jsonResult(404, { error: 'not found' });
-  const lower = Object.fromEntries(Object.entries(event.headers).map(([k, v]) => [k.toLowerCase(), v]));
-  const who = identify((n) => lower[n]);
+  const who = identify((n) => lower[n], { origin, path: event.rawPath });
   if (!who.ok) {
-    return jsonResult(401, { error: `session ${who.reason}`, login: '/auth/demo-login' }, { 'www-authenticate': `Bearer error="invalid_token", error_description="session ${who.reason}"` });
+    const description = who.reason === 'audience' ? 'token was issued for another resource' : `session ${who.reason}`;
+    return jsonResult(401, { error: description, login: '/auth/demo-login', resource_metadata: `${origin}/.well-known/oauth-protected-resource${event.rawPath}` },
+      { 'www-authenticate': challenge(origin, event.rawPath, { code: 'invalid_token', description }) });
+  }
+  if (who.via === 'none' && process.env.SHOP_COUNTER_REQUIRE_AUTH === '1') {
+    return jsonResult(401, { error: 'sign in: link your Shop Counter account', resource_metadata: `${origin}/.well-known/oauth-protected-resource${event.rawPath}` },
+      { 'www-authenticate': challenge(origin, event.rawPath) });
   }
 
   const host = event.requestContext.domainName ?? event.headers.host ?? 'localhost';

@@ -27,6 +27,43 @@ export interface DeviceInfo {
   port: Port | null;
   /** True when the dictionary recognized it (false = free-text device from the shopper). */
   known: boolean;
+  /**
+   * What the shopper said beyond the model name: year, chip, size, revision ("2017 Intel", "14 M3").
+   * Set by parseDevice only. A store listing without it is not proof for this exact device.
+   */
+  qualifier?: string;
+  /** The full device as the shopper named it ("MacBook Pro 2017 Intel"). Set by parseDevice only. */
+  label?: string;
+}
+
+export type DeviceKind = 'phone' | 'laptop' | 'tablet' | 'desktop' | 'watch' | 'earbuds' | 'robot' | 'other';
+
+/** The full name to speak and show: the model plus whatever else the shopper said about it. */
+export function deviceLabel(d: DeviceInfo): string {
+  return d.label ?? d.name;
+}
+
+/** What kind of device it is, for "my phone" and for the icon on the My devices screen. */
+export function deviceKind(d: DeviceInfo): DeviceKind {
+  const n = d.name;
+  if (d.known) {
+    if (d.family === 'iPhone') return 'phone';
+    if (/^(iPad|Pixel Tablet|Galaxy Tab|Surface (Pro|Go))/i.test(n)) return 'tablet';
+    if (/^(MacBook|Pixelbook|Surface (Laptop|Book))/i.test(n)) return 'laptop';
+    if (/^(iMac|Mac)\b/i.test(n)) return 'desktop';
+    if (/Watch/i.test(n)) return 'watch';
+    if (/AirPods|Buds/i.test(n)) return 'earbuds';
+    if (/^(Galaxy|Pixel)\b/i.test(n)) return 'phone';
+    return 'other';
+  }
+  const t = `${n} ${d.label ?? ''}`;
+  if (/\b(robot|vacuum|roborock|saros|qrevo|roomba|dreame|eufy|mop)\b|\b[QS]\d{1,2}\b/i.test(t)) return 'robot';
+  if (/\b(phone|smartphone|oneplus|motorola|moto|xiaomi|redmi)\b/i.test(t)) return 'phone';
+  if (/\b(laptop|notebook|chromebook|thinkpad|xps|zenbook|spectre)\b/i.test(t)) return 'laptop';
+  if (/\b(tablet|kindle)\b/i.test(t)) return 'tablet';
+  if (/\b(watch)\b/i.test(t)) return 'watch';
+  if (/\b(earbuds|headphones|buds)\b/i.test(t)) return 'earbuds';
+  return 'other';
 }
 
 export interface DeviceMention {
@@ -103,7 +140,7 @@ const RULES: Rule[] = [
     },
   },
   {
-    re: /\bMacBook(?![a-z])(?:\s(Air|Pro))?(?:\s(?:1[3-6](?:"|”|''|-inch|\sinch)))?(?:\s\(?(M\d)(?:\s(Pro|Max|Ultra))?\)?(?![\w-]))?/gi,
+    re: /\bMacBook(?![a-z])(?:\s(Air|Pro))?(?:\s1[3-6](?:"|”|''|-inch|\sinch)?(?![\w"”'-]))?(?:\s\(?(M\d)(?:\s(Pro|Max|Ultra))?\)?(?![\w-]))?/gi,
     build: (m) => {
       const fam = m[1] ? `MacBook ${m[1][0].toUpperCase()}${m[1].slice(1).toLowerCase()}` : 'MacBook';
       const chip = m[2] ? `${m[2].toUpperCase()}${m[3] ? ' ' + normSuffix(m[3]) : ''}` : null;
@@ -152,6 +189,10 @@ const RULES: Rule[] = [
     re: /\b(?:Microsoft\s)?Surface\s(Pro|Laptop|Go|Book)\b/gi,
     build: (m) => [simple(`Surface ${m[1][0].toUpperCase()}${m[1].slice(1).toLowerCase()}`, 'Microsoft')],
   },
+  // Bare family names last, so a specific model above always wins the same span.
+  // "charger for my Pixel" names a Pixel, just not which one: it must not fall back to the closet.
+  { re: /\b(?:Google\s)?Pixel\b(?![\w-])/gi, build: () => [simple('Pixel', 'Google')] },
+  { re: /\b(?:Samsung\s)?Galaxy\b(?![\w-])/gi, build: () => [simple('Galaxy', 'Samsung')] },
 ];
 
 /** Every device mention in a piece of text, in order of appearance, without overlaps. */
@@ -177,8 +218,20 @@ export function findDevices(text: string): DeviceMention[] {
 export function parseDevice(input: string): DeviceInfo {
   const cleaned = input.replace(/\b(my|our|an?|the)\b/gi, ' ').replace(/\s+/g, ' ').trim();
   const [first] = findDevices(cleaned);
-  if (first) return first.device;
-  return { name: cleaned, brand: null, family: cleaned, series: null, generic: false, port: null, known: false };
+  if (!first) return { name: cleaned, brand: null, family: cleaned, series: null, generic: false, port: null, known: false, label: cleaned };
+  // Whatever else the shopper said about the model ("2017 Intel", "14 M3", "(3rd gen)") is kept:
+  // a listing for the bare model does not prove it for this one. Filler words are not a qualifier.
+  const rest = `${cleaned.slice(0, first.index)} ${cleaned.slice(first.index + first.raw.length)}`
+    .replace(/[(),]/g, ' ')
+    .replace(/\b(new|old|older|latest|current|work|personal|apple|samsung|google|microsoft|phone|laptop|tablet|computer)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const qualifier = /\d|\b(intel|silicon|retina|touch\s?bar|gen|generation|refurbished)\b/i.test(rest) ? rest : '';
+  const d = first.device;
+  // Keep the shopper's own words for the model ("MacBook Pro 14 M3") unless they differ only in case or spacing.
+  const flat = (x: string) => x.toLowerCase().replace(/[\s"”'-]+|inch/g, '');
+  const said = flat(first.raw) === flat(d.name) ? d.name : first.raw.trim();
+  return qualifier ? { ...d, qualifier, label: `${said} ${qualifier}` } : { ...d, label: said };
 }
 
 /** Pull every recognizable device out of a free-text need ("charger for my iPhone 15 and MacBook Air"). */
@@ -194,16 +247,17 @@ export function devicesInText(text: string): DeviceInfo[] {
 export type MatchLevel = 'exact' | 'series' | 'family';
 
 /**
- * Does a device the store lists cover the shopper's device?
- * - exact:  "iPhone 15" lists "iPhone 15"
+ * How a device the store lists relates to the shopper's device. Only `exact` is proof of fit.
+ * - exact:  "iPhone 15" lists "iPhone 15" (spelling variants are normalized by the parser)
  * - series: store lists "iPhone 15", shopper has "iPhone 15 Pro"
- * - family: store lists "MacBook Air", shopper has "MacBook Air M3" (generation-agnostic families only)
+ * - family: store lists "MacBook Air", shopper has "MacBook Air M3"; or the same name, but the
+ *           shopper named more ("MacBook Pro 2017 Intel" vs a listing for "MacBook Pro")
  * Bare generic names ("iPhone", "iPad", "Mac") never match.
  */
 export function deviceMatch(shopper: DeviceInfo, listed: DeviceInfo): MatchLevel | null {
   const eq = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' }) === 0;
   if (listed.generic || shopper.generic) return null;
-  if (eq(listed.name, shopper.name)) return 'exact';
+  if (eq(listed.name, shopper.name)) return shopper.qualifier ? 'family' : 'exact';
   if (shopper.series && eq(listed.name, shopper.series)) return 'series';
   if (listed.family !== 'iPhone' && listed.family !== 'Galaxy' && listed.family !== 'Pixel' && eq(listed.name, shopper.family)) {
     return 'family';

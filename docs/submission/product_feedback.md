@@ -1,6 +1,6 @@
 # Shop Counter: product feedback, tool by tool
 
-One section per tool we actually used, October 12-13, 2026. Versions are the ones in our lockfile. Where a problem cost us real time, the full story is in `docs/submission/friction_log.md` (entry number in brackets).
+One section per tool we used, October 12-13, 2026 (Amazon Bedrock is the one we built for but could not call live). Versions are the ones in our lockfile. Where a problem cost us real time, the full story is in `docs/submission/friction_log.md` (entry number in brackets).
 
 ---
 
@@ -8,7 +8,7 @@ One section per tool we actually used, October 12-13, 2026. Versions are the one
 
 - **What we used it for:** The whole product. Shop Counter is a self-hosted MCP server with 9 tools, served over Streamable HTTP at `/mcp` (Satechi) and `/stores/roborock/mcp`. Every tool returns two things: one or two spoken sentences in `content[0].text` and a `structuredContent` object for the screen.
 - **What works well:** That split between text and structured content fits a voice device with a screen almost perfectly. The voice line and the card come from the same call, so they can't disagree. Version negotiation is simple and honest: our client asks for 2025-11-25 and gets it; ask for 2025-06-18 and the server answers 2025-06-18.
-- **What needs work:** The stateless story. Stateless is the natural mode on Lambda, but the spec reads as if sessions are the default, and the side effects (GET returns 405, the server can't see client capabilities on later requests) are left for you to find [3]. Identity is the other gap: outside full OAuth there's no lightweight pattern for "who is the shopper", so we wrote a signed demo session behind `Authorization: Bearer`.
+- **What needs work:** The stateless story. Stateless is the natural mode on Lambda, but the spec reads as if sessions are the default, and the side effects (GET returns 405, the server can't see client capabilities on later requests) are left for you to find [3]. Identity is the other gap: outside full OAuth there's no lightweight pattern for "who is the shopper". We started with a signed demo session behind `Authorization: Bearer`, then built account linking by the MCP Authorization spec (OAuth 2.1, PKCE, client metadata documents, resource indicators) in the same Lambda. The spec was clear enough to implement from the text alone; what we could not learn is which client type Alexa+ itself uses [16].
 - **Onboarding:** Reading the transport section and building a working `initialize -> tools/list -> tools/call` loop took a single spike, on day one.
 - **Would we use it again:** Yes. It is the reason one server can face Alexa+, our simulator and any other MCP client without changes.
 
@@ -68,15 +68,23 @@ One section per tool we actually used, October 12-13, 2026. Versions are the one
 - **Onboarding:** Fine with the CLI; we would not have found the pattern from the console alone.
 - **Would we use it again:** Yes, until there is a native cap.
 
-## 9. Claude Haiku (`claude-haiku-5-5`) as the Alexa model in our simulator
+## 9. Amazon Bedrock (built, never called live)
 
-- **What we used it for:** Playing Alexa+ in the simulator, since the real one isn't available to us [1]. Tools come from our server's `tools/list`; the browser runs every tool call through its own MCP client, so the JSON-RPC log shows each step. Effort `low`, prompt caching on the system prompt and tools, a $0.50 daily cap in code.
+- **What we used it for:** Nothing in production, and we want to be plain about that. We wrote the Lambda brain for Bedrock first: Claude Haiku 5.5 through Claude in Amazon Bedrock (`@anthropic-ai/bedrock-sdk`, `AnthropicBedrockMantle`, the function's IAM role, no keys) and Amazon Nova Lite through the Converse API as a fallback. Both paths are in `apps/shop-counter/src/brain.ts` behind `BRAIN_PROVIDER` and covered by unit tests, including the real SDK signing a request against a mocked network.
+- **What works well:** The Messages format on Bedrock is the same one our simulator already speaks, so switching providers would not have touched the browser. Converse is a clean target for a format translation layer (about 70 lines for both directions in `brain.ts`, tested).
+- **What needs work:** Our new account gets "not available for this account" for every model we tried in the console (Claude Haiku 4.5, GPT-5.6 Luna), with no reason and no path to request access; Claude Haiku 5.5 is not in the catalog [13]. Claude sits on a second service, `bedrock-mantle`, with its own IAM action (`bedrock-mantle:CreateInference`), next to `bedrock-runtime` and `bedrock:InvokeModel` for Nova [14].
+- **Onboarding:** The SDK and the docs were enough to write and test both paths. Learning that the account could not use them took one console call, which we should have made before writing any code.
+- **Would we use it again:** Yes, on an account with model access. The flag is one environment variable away.
+
+## 10. Claude Haiku (`claude-haiku-5-5`) as the Alexa model in our simulator
+
+- **What we used it for:** Playing Alexa+ in the simulator, since the real one isn't available to us [1]. Since October 13 it is called through the Anthropic API from the shop-counter Lambda (`POST /brain/turn`), because Bedrock is blocked for our account [13]; locally the simulator calls it from its own dev server. Tools come from our server's `tools/list`; the browser runs every tool call through its own MCP client, so the JSON-RPC log shows each step. Effort `low`, prompt caching on the system prompt and tools, a $0.50 daily cap and 60 turns an hour per visitor in code.
 - **What works well:** Tool choice. In 18 live conversations (`evals/llm_run.mjs`) it picked the right tool 18 of 18 times, invented 0 facts, and ordered only after an explicit yes. It is cheap and quick: the whole first evaluation was 159 calls for $0.0322, a turn takes 2.0 to 2.6 seconds, and development plus both evals on October 12 cost $0.0436 together.
 - **What needs work:** It doesn't stick to a length limit given in the prompt [11], it sometimes answers from a product title instead of calling the tool [12], and answers vary from run to run. Thinking blocks must be sent back unchanged, so a host can't trim the model's history; trim only what you speak.
 - **Onboarding:** Fast with the Anthropic TypeScript SDK.
 - **Would we use it again:** Yes, as the default model for voice prototypes.
 
-## 10. Shopify storefront `products.json`
+## 11. Shopify storefront `products.json`
 
 - **What we used it for:** Live catalogs of two real stores that are not ours: Satechi (141 products, 298 variants) and Roborock (311 products). `/products.json?limit=250&page=N`, one request per second, a clear User-Agent, a 6-hour cache. The open library `packages/shelf` turns any such feed into the same 9 MCP tools.
 - **What works well:** No key, no partner account, the same shape on every Shopify store. Satechi keeps compatibility in tags (`iPhone 15` is on 61 products), which let us answer fit questions with a literal quote from the store, 0 mismatches against the raw feed.
@@ -84,7 +92,7 @@ One section per tool we actually used, October 12-13, 2026. Versions are the one
 - **Onboarding:** Zero. The work is all in cleaning the data, and in checking each store's terms before reading its feed.
 - **Would we use it again:** Yes. It's the fastest way to get a real catalog behind an Alexa+ demo.
 
-## 11. Gemini TTS (demo video only, not part of the product)
+## 12. Gemini TTS (demo video only, not part of the product)
 
 - **What we used it for:** The four voices in our demo video (narrator, two shoppers, Alexa). Alexa's lines are word for word what the simulator said on the live run.
 - **What works well:** Natural voices for English narration, and one voice per role stays consistent within a model (`gemini-3.8-flash-lite-tts`: Charon, Aoede, Puck, Kore). The second render was 25 requests, 25 successful.

@@ -12,9 +12,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "check": "node scripts/build.mjs && tsx --conditions=shelf-source check.mjs",
-    "package": "node scripts/build.mjs && rm -f dist/function.zip && cd dist && zip -q -9 function.zip lambda.mjs $(ls view.html 2>/dev/null) && ls -la function.zip"
+    "package": "npm run build --prefix ../echo-sim && node scripts/build.mjs && rm -f dist/function.zip && cd dist && zip -q -9 -r function.zip lambda.mjs SKILL.md $(ls view.html 2>/dev/null) $(ls -d sim 2>/dev/null) && ls -la function.zip"
   },
   "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "0.34.4",
+    "@anthropic-ai/sdk": "0.133.0",
+    "@aws-sdk/client-bedrock-runtime": "3.1142.0",
     "@aws-sdk/client-dynamodb": "3.1142.0",
     "@aws-sdk/lib-dynamodb": "3.1142.0",
     "@modelcontextprotocol/node": "2.1.1",

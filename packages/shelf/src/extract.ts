@@ -187,18 +187,62 @@ export function extractDeviceEvidence(src: SourceText): DeviceEvidence[] {
 /** "Not compatible with X", "doesn't fit X", "incompatible with X": the store says no for whatever follows. */
 const NEGATION = /(?:\bnot\s+(?:compatible|designed|made|suitable|intended)\s+(?:with|for)|\b(?:does\s+not|doesn't|do\s+not|don't|will\s+not|won't)\s+(?:fit|work|support)(?:\s+(?:with|on|for))?|\bincompatible\s+with|\bnot\s+for\s+use\s+with)\b[^.;:!?]*$/i;
 
-/** Is the text at `index` inside a negated compatibility phrase of the same clause? */
+/**
+ * Is the text at `index` inside a negated compatibility phrase of the same clause?
+ * "Incompatible with other models in the Qrevo series" negates the OTHER models, not the Qrevo itself.
+ */
 export function negatedAt(text: string, index: number): boolean {
-  return NEGATION.test(text.slice(Math.max(0, index - 80), index));
+  const m = NEGATION.exec(text.slice(Math.max(0, index - 80), index));
+  return m !== null && !/\bother\b/i.test(m[0]);
 }
 
 /**
- * The store explicitly says the product does NOT work with `needle` ("(Not compatible with Saros 10R)").
+ * Words before a model name that make it something other than a listing: the product's predecessor,
+ * a comparison or a trade-in ("Upgraded from S8 MaxV Ultra", "replaces the Q5 brush", "quieter than the Q5 Max").
+ * "Replacement for X" is a listing and is not caught here.
+ */
+const NOT_A_LISTING = /\b(?:upgraded?\s+(?:from|over)|replaces|replacing|successor\s+(?:to|of)|instead\s+of|vs\.?|versus|compared\s+(?:to|with)|than|trade[\s-]?in)\s+(?:(?:the|your|an?|our)\s+)?(?:[A-Z][a-z]+\s+)?$/i;
+
+/** Words that may follow a model name without being part of it ("Qrevo only", "QRevo 1 Year", "Saros 10 Robot Vacuum"). */
+const AFTER_MODEL = new Set([
+  'only', 'and', 'or', 'with', 'for', 'in', 'on', 'the', 'series', 'model', 'models', 'version', 'owners', 'users',
+  'robot', 'robots', 'vacuum', 'vacuums', 'cleaner', 'cleaners', 'mop', 'mops', 'dock', 'base', 'station', 'lds', 'extended', 'warranty',
+  'replacement', 'replacements', 'accessory', 'accessories', 'parts', 'kit', 'pack', 'set', 'main', 'side', 'brush', 'brushes',
+  'cover', 'filter', 'filters', 'cloth', 'cloths', 'bag', 'bags', 'roller', 'bracket', 'battery', 'cable', 'pad', 'pads', 'white', 'black',
+  'cordless', 'wet', 'dry', 'stick', 'handheld', 'robotic', 'self', 'cleaning', 'smart', 'refill',
+]);
+
+/**
+ * Does the text right after a model name continue that name? "Qrevo" + " Curv" is the Qrevo Curv, "S8" + "+" is the S8+,
+ * "Qrevo" + " 2 Pro" is the Qrevo 2 Pro. A number followed by "Year(s)" is a plan term ("QRevo 1 Year"), not a model.
+ */
+export function continuesModel(rest: string): boolean {
+  if (rest.startsWith('+')) return true;
+  const m = /^[ \t]+([A-Za-z0-9][\w+]*)/.exec(rest);
+  if (!m) return false;
+  const w = m[1];
+  if (/^\d+$/.test(w)) return !/^[ \t]+\d+\s+(?:years?|months?|yrs?)\b/i.test(rest);
+  if (AFTER_MODEL.has(w.toLowerCase())) return false;
+  return /^[A-Z]/.test(w) || /\d/.test(w);
+}
+
+/** A mention of `needle` at `index` that the store means as "this product fits it". */
+function listedAt(text: string, index: number, length: number): boolean {
+  if (negatedAt(text, index)) return false;
+  if (NOT_A_LISTING.test(text.slice(Math.max(0, index - 40), index))) return false;
+  return !continuesModel(text.slice(index + length));
+}
+
+const literalRe = (needle: string, flags = 'gi') => new RegExp(`(?<![\\w-])${escapeRegExp(needle.trim())}(?![\\w-])`, flags);
+
+/**
+ * The store explicitly says the product does NOT work with `needle` ("(Not compatible with Saros 10R)"),
+ * or that it is for one model and not "other models in the Qrevo series" while `needle` is another Qrevo.
  * Returns the literal clause as evidence, or null.
  */
-export function findNegative(src: SourceText, needle: string): { source: EvidenceSource; quote: string } | null {
+export function findNegative(src: SourceText, needle: string): { source: EvidenceSource; quote: string; others?: string } | null {
   if (needle.trim().length < 2) return null;
-  const re = new RegExp(`(?<![\\w-])${escapeRegExp(needle.trim())}(?![\\w-])`, 'gi');
+  const re = literalRe(needle);
   const scan = (text: string): boolean => {
     for (const m of text.matchAll(re)) if (negatedAt(text, m.index ?? 0)) return true;
     return false;
@@ -212,24 +256,77 @@ export function findNegative(src: SourceText, needle: string): { source: Evidenc
       return { source: 'description', quote: window(s, s.slice(at, at + needle.length)) };
     }
   }
+  // "for Qrevo only (Incompatible with other models in the Qrevo series)": a no for a Qrevo S, never for the Qrevo.
+  const words = needle.trim().split(/\s+/);
+  for (let n = words.length - 1; n >= 1; n--) {
+    const family = words.slice(0, n).join(' ');
+    if (family.length < 2) continue;
+    const other = new RegExp(`\\bother\\s+(?:models?\\s+(?:in|of)\\s+the\\s+${escapeRegExp(family)}\\s+(?:series|family|line)|${escapeRegExp(family)}\\s+(?:models|series))\\b`, 'i');
+    for (const [source, text] of [['title', src.title], ...src.options.map((o) => ['options', o])] as [EvidenceSource, string][]) {
+      const m = other.exec(text);
+      if (m && NEGATION.test(text.slice(Math.max(0, m.index - 80), m.index))) return { source, quote: text, others: family };
+    }
+  }
   return null;
 }
 
-/** Literal, case-insensitive search for a free-text device in store data (for devices outside the dictionary). */
+/**
+ * Literal search for a free-text device in store data (for devices outside the dictionary), by meaning:
+ * the name must end where the model ends ("Qrevo" is not "Qrevo Curv", "S8" is not "S8 Pro Ultra") and
+ * must not be a predecessor or a comparison ("Upgraded from S8 MaxV Ultra"). "Qrevo Curv Series" names
+ * the Qrevo Curv itself; for a longer model in that series see findSeries.
+ */
 export function findLiteral(src: SourceText, needle: string): { source: EvidenceSource; quote: string } | null {
-  if (needle.trim().length < 3) return null;
-  const re = new RegExp(`(?<![\\w-])${escapeRegExp(needle.trim())}(?![\\w-])`, 'i');
+  // Two characters are enough for a model code ("S8", "Q5") now that the name must end where the model ends.
+  if (needle.trim().length < 3 && !/^[a-z]\d$/i.test(needle.trim())) return null;
+  const re = literalRe(needle);
   // A tag counts only when it IS the device ("Saros 10R"): "magsafe charger" is a shelf label, not a promise.
   const whole = needle.trim().toLowerCase();
   const tag = src.tags.find((t) => t.replace(/^device:\s*/i, '').trim().toLowerCase() === whole);
   if (tag) return { source: 'tags', quote: tag };
-  const hit = (text: string) => { const m = re.exec(text); return m && !negatedAt(text, m.index) ? m : null; };
+  const hit = (text: string) => {
+    for (const m of text.matchAll(re)) if (listedAt(text, m.index ?? 0, m[0].length)) return m;
+    return null;
+  };
   if (hit(src.title)) return { source: 'title', quote: src.title };
   const opt = src.options.find((o) => hit(o));
   if (opt) return { source: 'options', quote: opt };
   for (const s of sentences(src.description)) {
     const m = hit(s);
     if (m && COMPAT_CONTEXT.test(s)) return { source: 'description', quote: window(s, m[0]) };
+  }
+  return null;
+}
+
+/**
+ * The store lists the series or the "+" edition of the free-text device, not the device itself:
+ * "Saros Series" for a Saros 10, "Qrevo Series" for a Qrevo S, "Q7 Max+" for a Q7 Max. The quote is
+ * that name as written. Never a yes.
+ */
+export function findSeries(src: SourceText, needle: string): { source: EvidenceSource; quote: string } | null {
+  const words = needle.trim().split(/\s+/);
+  const names = [`${escapeRegExp(needle.trim())}\\+(?![\\w+-])`];
+  for (let n = words.length - 1; n >= 1; n--) {
+    const family = words.slice(0, n).join(' ');
+    if (family.length >= 2 && !/^\d+$/.test(family)) names.push(`${escapeRegExp(family)}\\s+series\\b`);
+  }
+  for (const name of names) {
+    const re = new RegExp(`(?<![\\w-])${name}`, 'gi');
+    const hit = (text: string) => {
+      for (const m of text.matchAll(re)) {
+        const i = m.index ?? 0;
+        // Any negation counts here, "other models in the Qrevo series" included.
+        if (!NEGATION.test(text.slice(Math.max(0, i - 80), i)) && !NOT_A_LISTING.test(text.slice(Math.max(0, i - 40), i))) return m[0];
+      }
+      return null;
+    };
+    const t = hit(src.title);
+    if (t) return { source: 'title', quote: t };
+    for (const o of src.options) { const q = hit(o); if (q) return { source: 'options', quote: q }; }
+    for (const s of sentences(src.description)) {
+      const q = COMPAT_CONTEXT.test(s) ? hit(s) : null;
+      if (q) return { source: 'description', quote: q };
+    }
   }
   return null;
 }

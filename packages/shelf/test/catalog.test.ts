@@ -83,8 +83,16 @@ describe('compatibility', () => {
   const dev = parseDevice;
   it('confirms from a tag with the literal tag as quote', () => {
     expect(checkCompat(item(desk140), dev('iPhone 15'))).toMatchObject({ status: 'confirmed', evidence: { source: 'tags', quote: 'iPhone 15' }, level: 'exact' });
-    expect(checkCompat(item(desk140), dev('iPhone 15 Pro Max'))).toMatchObject({ status: 'confirmed', level: 'series' });
-    expect(checkCompat(item(desk140), dev('MacBook Air M3'))).toMatchObject({ status: 'confirmed', level: 'family', evidence: { quote: 'MacBook Air' } });
+    // A series or family listing is reported as exactly that, never as "it works" (council 2, 2026-10-13).
+    expect(checkCompat(item(desk140), dev('iPhone 15 Pro Max'))).toMatchObject({
+      status: 'family_only', level: 'series', note: 'The store lists iPhone 15, not your iPhone 15 Pro Max specifically.',
+    });
+    expect(checkCompat(item(desk140), dev('MacBook Air M3'))).toMatchObject({ status: 'family_only', level: 'family', evidence: { quote: 'MacBook Air' } });
+    expect(checkCompat(item(desk140), dev('MacBook Pro 2017 Intel'))).toMatchObject({
+      status: 'family_only', note: 'The store lists MacBook Pro, not your MacBook Pro 2017 Intel specifically.',
+    });
+    expect(checkCompat(item(desk140), dev('MacBook Pro 14 M3')).status).toBe('family_only');
+    expect(checkCompat(item(desk140), dev('iphone 15')).status).toBe('confirmed');
   });
 
   it('confirms from a description only inside a compatibility phrase', () => {
@@ -104,7 +112,7 @@ describe('compatibility', () => {
   });
 
   it('does not stretch a series listing to a case that needs an exact fit', () => {
-    expect(checkCompat(item(phoneCase), dev('iPhone 15 Pro')).status).toBe('not_listed');
+    expect(checkCompat(item(phoneCase), dev('iPhone 15 Pro'))).toMatchObject({ status: 'family_only', note: expect.stringMatching(/needs an exact fit/) });
     expect(checkCompat(item(phoneCase), dev('iPhone 15')).status).toBe('confirmed');
   });
 

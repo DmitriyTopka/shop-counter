@@ -117,8 +117,11 @@ export function createShelfServer(opts: ShelfServerOptions, ctx: RequestContext 
       annotations: ro,
       title: 'Check compatibility',
       description:
-        'Check whether a product works with a device. Answers "confirmed" only when the store itself lists the device (with a quote), ' +
-        '"incompatible" for a hard connector mismatch, otherwise "not_listed". Without a device, checks the shopper\'s remembered devices.',
+        'Check whether a product works with a device. Answers "confirmed" only when the store itself lists this exact model (with a quote), ' +
+        '"family_only" when the store lists only the series or family (e.g. "iPhone 17" for an iPhone 17 Pro), ' +
+        '"incompatible" when the store rules it out or the connector cannot fit, otherwise "not_listed". ' +
+        'Pass the device the shopper named. Without a device, or with "my phone" / "my laptop", the remembered devices are used; ' +
+        'if several remembered devices fit, the answer is error "device_ambiguous" with the options to ask about.',
       inputSchema: z.object({
         product_id: z.string().describe('Product id from find_products'),
         device: z.string().optional().describe('e.g. "iPhone 15 Pro"'),

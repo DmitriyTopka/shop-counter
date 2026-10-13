@@ -1,0 +1,611 @@
+{
+  "link": {
+    "linked": [
+      "15:21:15··account linked: guest-60d2f7b4c45e, token for https://x2uph6avweit5yuv5crwm474240pwtzb.lambda-url.us-east-1.on.aws, 60 min{\n  \"note\": \"account linked: guest-60d2f7b4c45e, token for https://x2uph6avweit5yuv5crwm474240pwtzb.lambda-url.us-east-1.on.aws, 60 min\"\n}",
+      "15:21:15··connect https://x2uph6avweit5yuv5crwm474240pwtzb.lambda-url.us-east-1.on.aws/mcp as guest-60d2f7b4c45e (linked account, OAuth token){\n  \"note\": \"connect https://x2uph6avweit5yuv5crwm474240pwtzb.lambda-url.us-east-1.on.aws/mcp as guest-60d2f7b4c45e (linked account, OAuth token)\"\n}"
+    ],
+    "frames": {
+      "link_00_button": {
+        "tap": {
+          "x": 1791.59375,
+          "y": 14,
+          "width": 108.40625,
+          "height": 35.59375
+        }
+      },
+      "link_01_consent": {
+        "tap": {
+          "x": 965,
+          "y": 784.734375,
+          "width": 215,
+          "height": 47.1875
+        },
+        "card": {
+          "x": 716,
+          "y": 220.0625,
+          "width": 488,
+          "height": 639.859375
+        },
+        "patched_sam_line": 1
+      },
+      "link_02_linked": {
+        "activity": {
+          "x": 1520,
+          "y": 64.59375,
+          "width": 400,
+          "height": 1015.40625
+        }
+      }
+    }
+  },
+  "sam": {
+    "icon_patched_frames": 1,
+    "flow": [
+      {
+        "key": "sam_01",
+        "shopper": "I have a Roborock Saros 10R and an iPhone 16",
+        "alexa": "Got it, I've saved your Roborock Saros 10R and iPhone 16. Satechi lists the USB-C to USB-C Cable for your iPhone 16, at $8.99.",
+        "model_text": "Got it, I've saved your Roborock Saros 10R and iPhone 16. Satechi lists the USB-C to USB-C Cable for your iPhone 16, at $8.99.",
+        "tools": [
+          {
+            "name": "remember_my_devices",
+            "input": {
+              "devices": [
+                "Roborock Saros 10R",
+                "iPhone 16"
+              ]
+            }
+          }
+        ],
+        "llm_ok": true,
+        "via": "voice",
+        "ok": true
+      },
+      {
+        "key": "sam_02",
+        "shopper": "Will the Accessories Pack for Saros 10 fit my robot?",
+        "alexa": "No, the Accessories Pack for Saros 10 is out of stock, and the store says it's not compatible with your Saros 10R. The Main Brush Cover is listed for your Saros 10R at $19.99.",
+        "model_text": "No, the Accessories Pack for Saros 10 is out of stock, and the store says it's not compatible with your Saros 10R. The Main Brush Cover is listed for your Saros 10R at $19.99.",
+        "tools": [
+          {
+            "name": "find_products",
+            "input": {
+              "need": "Accessories Pack for Saros 10"
+            }
+          },
+          {
+            "name": "check_compatibility",
+            "input": {
+              "product_id": "42226657362038",
+              "device": "my robot"
+            }
+          }
+        ],
+        "llm_ok": true,
+        "via": "voice",
+        "ok": true
+      }
+    ],
+    "frames": {
+      "sam_01_a_ask": {
+        "device": {
+          "x": 400,
+          "y": 189.671875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 207.578125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "sam_01_b_say": {
+        "device": {
+          "x": 400,
+          "y": 189.671875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 207.578125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "sam_01_c_clean": {
+        "device": {
+          "x": 400,
+          "y": 189.671875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 207.578125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "sam_02_a_ask": {
+        "device": {
+          "x": 400,
+          "y": 189.671875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 207.578125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "sam_02_b_say": {
+        "device": {
+          "x": 400,
+          "y": 189.671875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 207.578125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "sam_02_c_clean": {
+        "device": {
+          "x": 400,
+          "y": 189.671875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 207.578125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "sam_03_log": {
+        "device": {
+          "x": 200,
+          "y": 189.671875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 217.90625,
+          "y": 207.578125,
+          "width": 1084.1875,
+          "height": 609.84375
+        },
+        "log": {
+          "call": {
+            "x": 1529,
+            "y": 317.546875,
+            "width": 383,
+            "height": 252.078125
+          },
+          "result": {
+            "x": 1529,
+            "y": 577.625,
+            "width": 383,
+            "height": 347.390625
+          },
+          "panel": {
+            "x": 1520,
+            "y": 64.59375,
+            "width": 400,
+            "height": 1015.40625
+          }
+        }
+      }
+    }
+  },
+  "maya": {
+    "flow": [
+      {
+        "key": "maya_01",
+        "shopper": "I just got an iPhone 15 and a MacBook Air",
+        "alexa": "Got it, I've saved your iPhone 15 and MacBook Air. Satechi lists the USB-C to USB-C Cable for your MacBook Air, at $8.99.",
+        "model_text": "Got it, I've saved your iPhone 15 and MacBook Air. Satechi lists the USB-C to USB-C Cable for your MacBook Air, at $8.99. Want chargers for them next?",
+        "tools": [
+          {
+            "name": "remember_my_devices",
+            "input": {
+              "devices": [
+                "iPhone 15",
+                "MacBook Air"
+              ]
+            }
+          }
+        ],
+        "llm_ok": true,
+        "via": "voice",
+        "ok": true
+      },
+      {
+        "key": "maya_02",
+        "shopper": "Find me a charger",
+        "alexa": "The best fit is the OntheGo 67W Slim Wall Charger at $59.99, and the store lists it for both your iPhone 15 and MacBook Air. Want me to compare the top two?",
+        "model_text": "The best fit is the OntheGo 67W Slim Wall Charger at $59.99, and the store lists it for both your iPhone 15 and MacBook Air. Want me to compare the top two?",
+        "tools": [
+          {
+            "name": "find_products",
+            "input": {
+              "need": "charger for my iPhone 15 and MacBook Air",
+              "for_devices": [
+                "iPhone 15",
+                "MacBook Air"
+              ]
+            }
+          }
+        ],
+        "llm_ok": true,
+        "via": "voice",
+        "ok": true
+      },
+      {
+        "key": "maya_03",
+        "shopper": "Will this charger work with my phone?",
+        "alexa": "Yes, the store lists the iPhone 15 for the OntheGo 67W Slim Wall Charger. Want me to add it to your order?",
+        "model_text": "Yes, the store lists the iPhone 15 for the OntheGo 67W Slim Wall Charger. Want me to add it to your order?",
+        "tools": [
+          {
+            "name": "check_compatibility",
+            "input": {
+              "product_id": "43950442643544",
+              "device": "iPhone 15"
+            }
+          }
+        ],
+        "llm_ok": true,
+        "via": "voice",
+        "ok": true
+      },
+      {
+        "key": "maya_04",
+        "shopper": "Order it",
+        "alexa": "That's the OntheGo 67W Slim Wall Charger, $59.99 before shipping and tax. Should I place the order?",
+        "model_text": "That's the OntheGo 67W Slim Wall Charger, $59.99 before shipping and tax. Should I place the order?",
+        "tools": [
+          {
+            "name": "prepare_order",
+            "input": {
+              "items": [
+                {
+                  "id": "43950442643544",
+                  "qty": 1
+                }
+              ]
+            }
+          }
+        ],
+        "llm_ok": true,
+        "via": "voice",
+        "ok": true
+      },
+      {
+        "key": "maya_05",
+        "shopper": "[tap] Place order",
+        "alexa": "Done: order SC-5DD504 is confirmed for $59.99. It's a demo, so no payment was taken.",
+        "model_text": "",
+        "tools": [
+          {
+            "name": "place_order"
+          }
+        ],
+        "via": "tap",
+        "ok": true
+      },
+      {
+        "key": "maya_07",
+        "shopper": "Where's my order?",
+        "alexa": "Your latest order, SC-5DD504 for the OntheGo 67W Slim Wall Charger, is confirmed and expected by October 17. That date is a demo estimate.",
+        "model_text": "Your latest order, SC-5DD504 for the OntheGo 67W Slim Wall Charger, is confirmed and expected by October 17. That date is a demo estimate.",
+        "tools": [
+          {
+            "name": "order_status",
+            "input": {}
+          }
+        ],
+        "llm_ok": true,
+        "via": "voice",
+        "ok": true
+      }
+    ],
+    "frames": {
+      "maya_00_home": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_01_a_ask": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_01_b_say": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_01_c_clean": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_02_a_ask": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_02_b_say": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_02_c_clean": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_03_a_ask": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_03_b_say": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_03_c_clean": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_04_a_ask": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_04_b_say": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_04_c_clean": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_05_a_tap": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        },
+        "tap": {
+          "x": 1041.765625,
+          "y": 497.28125,
+          "width": 417.78125,
+          "height": 49.109375
+        }
+      },
+      "maya_05_b_say": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_05_c_clean": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_06_newsession": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_07_a_ask": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_07_b_say": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      },
+      "maya_07_c_clean": {
+        "device": {
+          "x": 400,
+          "y": 168.875,
+          "width": 1120,
+          "height": 645.65625
+        },
+        "screen": {
+          "x": 417.90625,
+          "y": 186.78125,
+          "width": 1084.1875,
+          "height": 609.84375
+        }
+      }
+    }
+  }
+}

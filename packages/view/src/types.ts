@@ -41,17 +41,20 @@ export type Structured =
       kind: 'compat';
       product: Product;
       device?: string;
-      status: 'confirmed' | 'not_listed' | 'incompatible';
+      /** v1.6: family_only = the store lists the series or family, not this exact model */
+      status: 'confirmed' | 'family_only' | 'not_listed' | 'incompatible';
       evidence?: { source: string; quote: string } | null;
       note?: string;
       alternatives?: Product[];
-      also?: { device: string; status: 'confirmed' | 'not_listed' | 'incompatible'; evidence?: { source: string; quote: string } | null }[];
+      also?: { device: string; status: 'confirmed' | 'family_only' | 'not_listed' | 'incompatible'; evidence?: { source: string; quote: string } | null }[];
       /** v1.3: "closet" = the shopper did not name a device, the remembered one was used */
       device_source?: 'said' | 'closet';
     }
   | {
       kind: 'closet';
       devices: string[];
+      /** v1.6: the same devices with their kind (phone, laptop, tablet, desktop, watch, earbuds, robot, other), for icons */
+      items?: { name: string; kind: string }[];
       home?: { pets?: string[]; notes?: string } | null;
       /** v1.3: the store that answered; the closet itself is shared by every store */
       store?: string;
@@ -72,7 +75,7 @@ export type Structured =
   | { kind: 'order'; order: Order; already_placed?: boolean }
   | { kind: 'orders'; orders: Order[] }
   | { kind: 'handoff'; ticket_id: string; message: string }
-  | { kind: 'error'; code?: string; message: string };
+  | { kind: 'error'; code?: string; message: string; /** v1.6, device_ambiguous: the devices to choose from */ options?: string[] };
 
 export interface ToolResultLike {
   content?: { type: string; text?: string }[];

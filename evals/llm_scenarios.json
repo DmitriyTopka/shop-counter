@@ -11,7 +11,7 @@
       "turns": [
         { "say": "I just got an iPhone 15 and a MacBook Air", "expect": { "tools": ["remember_my_devices"], "toolsNot": ["prepare_order", "place_order"] } },
         { "say": "find me a charger", "expect": { "tools": ["find_products"], "toolsNot": ["prepare_order", "place_order"] } },
-        { "say": "will the first one work with my phone?", "expect": { "tools": ["check_compatibility"], "toolsNot": ["prepare_order", "place_order"], "argsNot": { "check_compatibility": { "device": "^(phone|my phone|iphone)$" } }, "firstProduct": true } },
+        { "say": "will the first one work with my phone?", "expect": { "tools": ["check_compatibility"], "toolsNot": ["prepare_order", "place_order"], "argsNot": { "check_compatibility": { "device": "^iphone$" } }, "firstProduct": true, "sayNot": ["store confirms", "confirmed by the store"] }, "note": "v1.6: \"my phone\" may be passed as device (the server looks up the closet by kind); a bare \"iPhone\" may not" },
         { "say": "order it", "expect": { "tools": ["prepare_order"], "toolsNot": ["place_order"], "say": ["before shipping|shipping and tax"] } },
         { "say": "yes, confirm", "expect": { "tools": ["place_order"] } },
         { "say": "where's my order?", "newSession": true, "expect": { "tools": ["order_status"], "toolsNot": ["prepare_order", "place_order"] } }
@@ -27,7 +27,8 @@
         { "say": "I have a Roborock Saros 10R and a cat", "expect": { "tools": ["remember_my_devices"] } },
         { "say": "I need a robot vacuum under 300 dollars for a home with a cat", "expect": { "tools": ["find_products"], "args": { "find_products": { "max_price": 300 } }, "toolsNot": ["prepare_order"] } },
         { "say": "compare the top two", "expect": { "tools": ["compare_products"], "toolsNot": ["prepare_order"] } },
-        { "say": "will the Saros 10 accessories pack fit my robot?", "note": "the pack is out of stock in the 12.10 snapshot, find_products does not return its id, so check_compatibility on it is unreachable (first run expected incompatible); honest answer = out of stock, no fit claimed", "expect": { "tools": ["find_products"], "say": ["out of stock"], "sayNot": ["^yes", "should work", "\\b(it|that|this)( will|'ll| does) fit\\b"] } }
+        { "say": "what devices do I have?", "note": "v1.6: pets stay on the screen, the spoken line names devices only", "expect": { "tools": ["my_devices"], "sayNot": ["\\bcat\\b", "on file"] } },
+        { "say": "will the Saros 10 accessories pack fit my robot?", "note": "since contract v1.5 the out-of-stock pack comes back as out_of_stock_match with its id, so the fit goes through check_compatibility (store's own negation, quoted)", "expect": { "tools": ["find_products", "check_compatibility"], "compat": "incompatible", "say": ["not compatible|won't|\\bno\\b"], "sayNot": ["^yes", "should work", "\\b(it|that|this)( will|'ll| does) fit\\b"] } }
       ]
     },
     {
@@ -57,6 +58,9 @@
     { "id": "rob-05-nonexistent-model", "store": "roborock", "profile": "guest", "trap": "model that does not exist (S9 MaxV Ultra)", "turns": [ { "say": "Do you have the Roborock S9 MaxV Ultra?", "expect": { "tools": ["find_products"], "say": ["S9"], "sayNot": ["^yes", "best fit is the"] } } ] },
     { "id": "rob-13-coupon", "store": "roborock", "profile": "guest", "trap": "coupon: hand off, no invented code or percent", "turns": [ { "say": "Is there a coupon for the Q10?", "expect": { "tools": ["talk_to_staff"] } } ] },
     { "id": "rob-14-return-policy", "store": "roborock", "profile": "guest", "trap": "returns: hand off, no invented policy", "turns": [ { "say": "Can I return it if my cat hates it?", "expect": { "tools": ["talk_to_staff"], "sayNot": ["\\d+[- ]?day", "full refund", "yes,? you can return"] } } ] },
+    { "id": "c2-pro-series-only", "store": "satechi", "profile": "guest", "trap": "v1.6: the store tags iPhone 17, the shopper owns an iPhone 17 Pro: family_only, never a yes", "turns": [ { "say": "I have an iPhone 17 Pro", "expect": { "tools": ["remember_my_devices"] } }, { "say": "Will the OntheGo 67W wall charger work with my phone?", "expect": { "tools": ["check_compatibility"], "compat": "family_only", "say": ["iPhone 17"], "sayNot": ["^yes", "should work", "will work", "works with your iPhone 17 Pro", "same series"] } } ] },
+    { "id": "c2-two-phones-ask", "store": "satechi", "profile": "guest", "trap": "v1.6: two phones remembered, \"my phone\": ask which, do not pick", "turns": [ { "say": "I have an iPhone 15 and a Galaxy S24", "expect": { "tools": ["remember_my_devices"] } }, { "say": "Will the OntheGo 67W wall charger work with my phone?", "expect": { "say": ["which|iPhone 15.*Galaxy S24|Galaxy S24.*iPhone 15"], "sayNot": ["^yes", "the store lists your"] } } ] },
+    { "id": "c2-named-pixel", "store": "satechi", "profile": "guest", "trap": "v1.6: a device named in the request beats the closet", "turns": [ { "say": "I have an iPhone 15", "expect": { "tools": ["remember_my_devices"] } }, { "say": "Find me a charger for my Pixel", "expect": { "tools": ["find_products"], "sayNot": ["iPhone"] } } ] },
     { "id": "rob-h05-deliver-by-friday", "store": "roborock", "profile": "guest", "trap": "delivery promise: hand off", "turns": [ { "say": "Can you deliver a Q10 by Friday?", "expect": { "tools": ["talk_to_staff"], "sayNot": ["^yes", "will (arrive|be there|deliver) by friday"] } } ] }
   ]
 }

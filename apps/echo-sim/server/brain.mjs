@@ -12,6 +12,7 @@ import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadSkill, systemPrompt } from '../../../skills/shop-counter/system-prompt.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 loadDotEnv(resolve(here, '../.env'));
@@ -26,23 +27,13 @@ const PRICE = { input: 0.1, output: 0.5, cache_write: 0.125, cache_read: 0.01 };
 const KEY = process.env.ANTHROPIC_API_KEY?.trim() || '';
 const client = KEY ? new Anthropic({ apiKey: KEY, maxRetries: 1, timeout: 30_000 }) : null;
 
-// The persona is short; HOW to use the Shop Counter tools lives in the Agent Skill (skills/shop-counter/SKILL.md),
-// the same file a real Alexa+ / MCP host would load. Frontmatter is dropped, the body goes into the system prompt.
-const BASE = `You are Alexa+, talking through an Echo Show in the shopper's home. You help them shop one store's real catalog using the Shop Counter tools. Sound like a helpful store clerk, warm and plain. This is voice: one or two short sentences, under 35 words, no lists, no markdown, no URLs, no ids.`;
+// System prompt = short Alexa persona + the Agent Skill (skills/shop-counter/SKILL.md). Built by the shared
+// skills/shop-counter/system-prompt.mjs, so this proxy and the Bedrock brain on Lambda send the same bytes.
 export const SKILL_PATH = process.env.SKILL_PATH ?? resolve(here, '../../../skills/shop-counter/SKILL.md');
+export { loadSkill };
 
-/** Agent Skill file -> { name, description, body }. Minimal frontmatter reader (key: value lines). */
-export function loadSkill(file = SKILL_PATH) {
-  if (!existsSync(file)) return null;
-  const text = readFileSync(file, 'utf8');
-  const m = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!m) return { name: null, description: null, body: text.trim() };
-  const meta = Object.fromEntries(m[1].split('\n').map((l) => l.match(/^(\w[\w-]*):\s*(.*)$/)).filter(Boolean).map((x) => [x[1], x[2].trim()]));
-  return { name: meta.name ?? null, description: meta.description ?? null, body: m[2].trim() };
-}
-
-const skill = loadSkill();
-export const SYSTEM = skill ? `${BASE}\n\n<skill name="${skill.name}">\n${skill.body}\n</skill>` : BASE;
+const skill = loadSkill(SKILL_PATH);
+export const SYSTEM = systemPrompt(skill);
 
 function loadDotEnv(file) {
   if (!existsSync(file)) return;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deviceMatch, devicesInText, findDevices, parseDevice } from '../src/devices.js';
+import { deviceKind, deviceMatch, devicesInText, findDevices, parseDevice } from '../src/devices.js';
 import { extractDeviceEvidence, extractFeatures, findLiteral, highlightsFrom } from '../src/extract.js';
 import { htmlToText } from '../src/text.js';
 
@@ -43,6 +43,29 @@ describe('device dictionary', () => {
     expect(deviceMatch(parseDevice('MacBook Air M3'), parseDevice('MacBook Air'))).toBe('family');
     expect(deviceMatch(parseDevice('MacBook Air'), parseDevice('MacBook Air M2'))).toBeNull();
     expect(deviceMatch(parseDevice('Mac'), parseDevice('Mac'))).toBeNull();
+    // Same model name, but the shopper said more: not an exact match.
+    expect(deviceMatch(parseDevice('MacBook Pro 2017 Intel'), parseDevice('MacBook Pro'))).toBe('family');
+    expect(deviceMatch(parseDevice('MacBook Pro 14 M3'), parseDevice('MacBook Pro M3'))).toBe('exact');
+  });
+
+  it('keeps the device as the shopper named it, normalizing only for matching', () => {
+    expect(parseDevice('MacBook Pro 2017 Intel')).toMatchObject({ name: 'MacBook Pro', qualifier: '2017 Intel', label: 'MacBook Pro 2017 Intel' });
+    expect(parseDevice('my iphone 17 pro')).toMatchObject({ name: 'iPhone 17 Pro', label: 'iPhone 17 Pro' });
+    expect(parseDevice('my new iPhone 15').qualifier).toBeUndefined();
+    expect(parseDevice('MacBook Pro 14 M3').label).toBe('MacBook Pro 14 M3');
+  });
+
+  it('reads a bare Pixel or Galaxy as a family, not as a free-text model', () => {
+    expect(parseDevice('my Pixel')).toMatchObject({ name: 'Pixel', generic: true, known: true });
+    expect(parseDevice('Galaxy')).toMatchObject({ generic: true });
+    expect(parseDevice('Pixel 8 Pro')).toMatchObject({ name: 'Pixel 8 Pro', generic: false });
+    expect(devicesInText('a charger for my Pixel').map((d) => d.name)).toEqual(['Pixel']);
+  });
+
+  it('knows the kind of each device', () => {
+    const k = (s: string) => deviceKind(parseDevice(s));
+    expect(['iPhone 17 Pro', 'Galaxy S24', 'Pixel 8', 'MacBook Air M2', 'iPad Pro M4', 'Mac mini', 'Apple Watch', 'AirPods Pro', 'Roborock Saros 10R', 'Q7 M5', 'Kindle Paperwhite'].map(k))
+      .toEqual(['phone', 'phone', 'phone', 'laptop', 'tablet', 'desktop', 'watch', 'earbuds', 'robot', 'robot', 'tablet']);
   });
 
   it('pulls devices out of a shopper sentence', () => {

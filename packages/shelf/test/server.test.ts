@@ -62,7 +62,8 @@ describe('MCP server', () => {
     expect(found.sc.kind).toBe('products');
     expect(found.sc.for_devices).toEqual(['iPhone 15', 'MacBook Air M2']);
     expect(found.sc.products[0].id).toBe(vid(desk140, 0));
-    expect(found.text).toBe('I found 3 options. The best fit is the PowerDesk 140W Desktop Charger at $99.99, and the store lists it for your iPhone 15 and MacBook Air M2.');
+    // The tag says "MacBook Air", not "MacBook Air M2": only the iPhone 15 is listed by its exact model.
+    expect(found.text).toBe('I found 3 options. The best fit is the PowerDesk 140W Desktop Charger at $99.99, and the store lists it for your iPhone 15.');
 
     const ids = found.sc.products.slice(0, 2).map((p: { id: string }) => p.id);
     const cmp = await s1.call('compare_products', { ids });
@@ -72,7 +73,7 @@ describe('MCP server', () => {
 
     const compat = await s1.call('check_compatibility', { product_id: vid(desk140, 0) });
     expect(compat.sc).toMatchObject({ kind: 'compat', device: 'iPhone 15', status: 'confirmed', evidence: { source: 'tags', quote: 'iPhone 15' } });
-    expect(compat.sc.also).toEqual([{ device: 'MacBook Air M2', status: 'confirmed', evidence: { source: 'tags', quote: 'MacBook Air' } }]);
+    expect(compat.sc.also).toEqual([{ device: 'MacBook Air M2', status: 'family_only', evidence: { source: 'tags', quote: 'MacBook Air' } }]);
 
     const prev = await s1.call('prepare_order', { items: [{ id: vid(desk140, 0), qty: 2 }] });
     expect(prev.sc).toMatchObject({ kind: 'order_preview', subtotal: 199.98, shipping: null, total: 199.98 });
@@ -143,12 +144,67 @@ describe('MCP server', () => {
     expect((await s.call('check_compatibility', { product_id: vid(desk140, 0), device: 'my phone' })).sc).toMatchObject({ device: 'iPhone 15', device_source: 'closet' });
     const yes = await s.call('check_compatibility', { product_id: vid(desk140, 0) });
     expect(yes.sc).toMatchObject({ status: 'confirmed', device: 'iPhone 15', device_source: 'closet', evidence: { quote: 'iPhone 15' } });
-    expect(yes.text).toBe('Works with your iPhone 15, the store confirms it.');
+    expect(yes.text).toBe('The store lists your iPhone 15 for the PowerDesk 140W Desktop Charger.');
     const no = await s.call('check_compatibility', { product_id: vid(lightningCable) });
     expect(no.sc.status).toBe('incompatible');
     expect(no.sc.alternatives.length).toBeGreaterThan(0);
     expect(no.text).toMatch(/^No, that won't work: .+\. The .+ is listed for it, at \$/);
     expect(SPOKEN_OK(no.text)).toBe(true);
+  });
+
+  it('says "the store lists iPhone 15, not your iPhone 15 Pro" instead of "it works"', async () => {
+    const s = await session('ivan');
+    await s.call('remember_my_devices', { devices: ['iPhone 15 Pro'] });
+    const r = await s.call('check_compatibility', { product_id: vid(desk140, 0) });
+    expect(r.sc).toMatchObject({ status: 'family_only', device: 'iPhone 15 Pro', device_source: 'closet', evidence: { quote: 'iPhone 15' } });
+    expect(r.text).toBe('The store lists iPhone 15, not your iPhone 15 Pro specifically.');
+    const found = await s.call('find_products', { need: 'a charger' });
+    expect(found.text).not.toMatch(/lists it for your iPhone 15 Pro/);
+    expect(found.text).toMatch(/not your iPhone 15 Pro specifically/);
+  });
+
+  it('keeps the closet device as said and checks it exactly', async () => {
+    const s = await session('judy');
+    const saved = await s.call('remember_my_devices', { devices: ['MacBook Pro 2017 Intel', 'iphone 15'] });
+    expect(saved.sc.devices).toEqual(['MacBook Pro 2017 Intel', 'iPhone 15']);
+    expect(saved.sc.items).toEqual([{ name: 'MacBook Pro 2017 Intel', kind: 'laptop' }, { name: 'iPhone 15', kind: 'phone' }]);
+    const r = await s.call('check_compatibility', { product_id: vid(desk140, 0), device: 'my laptop' });
+    expect(r.sc).toMatchObject({ status: 'family_only', device: 'MacBook Pro 2017 Intel' });
+    expect(r.text).toBe('The store lists MacBook Pro, not your MacBook Pro 2017 Intel specifically.');
+    // Forgetting works with the model's own spelling too.
+    expect((await s.call('remember_my_devices', { forget: ['iPhone 15'] })).sc.devices).toEqual(['MacBook Pro 2017 Intel']);
+  });
+
+  it('asks which phone when "my phone" fits two remembered phones', async () => {
+    const s = await session('kate');
+    await s.call('remember_my_devices', { devices: ['iPhone 15', 'Galaxy S24', 'MacBook Air M2'] });
+    const r = await s.call('check_compatibility', { product_id: vid(desk140, 0), device: 'my phone' });
+    expect(r.isError).toBe(true);
+    expect(r.sc).toMatchObject({ kind: 'error', code: 'device_ambiguous', options: ['iPhone 15', 'Galaxy S24'] });
+    expect(r.text).toBe('Which phone should I check: your iPhone 15 or Galaxy S24?');
+    // "my laptop" has one match: no question.
+    expect((await s.call('check_compatibility', { product_id: vid(desk140, 0), device: 'my laptop' })).sc).toMatchObject({ device: 'MacBook Air M2', device_source: 'closet' });
+    // No robot on file: ask for it, do not answer about the phone.
+    expect((await s.call('check_compatibility', { product_id: vid(desk140, 0), device: 'my robot' })).sc).toMatchObject({ code: 'device_required' });
+  });
+
+  it('a device named in the request beats the closet', async () => {
+    const s = await session('liam');
+    await s.call('remember_my_devices', { devices: ['iPhone 15'] });
+    const found = await s.call('find_products', { need: 'a charger for my Pixel' });
+    expect(found.sc.for_devices).toEqual(['Pixel']);
+    expect(found.text).not.toMatch(/iPhone/);
+    expect(found.text).toMatch(/Which Pixel model do you have/);
+    const c = await s.call('check_compatibility', { product_id: vid(desk140, 0), device: 'Galaxy S24' });
+    expect(c.sc).toMatchObject({ device: 'Galaxy S24', device_source: 'said', status: 'not_listed' });
+  });
+
+  it('does not read pets out loud on my_devices', async () => {
+    const s = await session('mia');
+    await s.call('remember_my_devices', { devices: ['Kindle Paperwhite'], home: { pets: ['cat'] } });
+    const r = await s.call('my_devices');
+    expect(r.sc.home).toMatchObject({ pets: ['cat'] });
+    expect(r.text).toBe('You have Kindle Paperwhite.');
   });
 
   it('hands off to staff and notifies', async () => {

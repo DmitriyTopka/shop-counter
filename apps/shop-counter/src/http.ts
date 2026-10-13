@@ -5,6 +5,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { createApp, createStateStore, log, routeStore, SERVER_NAME, SERVER_VERSION, viewSource } from './app.js';
+import { challenge, publicOrigin } from './oauth.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -35,6 +36,11 @@ function json(res: ServerResponse, status: number, body: unknown) {
 }
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
+  const raw = await readRaw(req);
+  return raw ? JSON.parse(raw) : undefined;
+}
+
+async function readRaw(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const c of req) {
@@ -42,8 +48,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
     if (size > 1_000_000) throw new Error('body too large');
     chunks.push(c as Buffer);
   }
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : undefined;
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 const server = createServer(async (req, res) => {
@@ -56,7 +61,7 @@ const server = createServer(async (req, res) => {
     res.setHeader('access-control-allow-origin', origin);
     res.setHeader('vary', 'origin');
     res.setHeader('access-control-allow-headers', 'content-type, accept, authorization, mcp-protocol-version, mcp-session-id, last-event-id, x-user-id');
-    res.setHeader('access-control-expose-headers', 'mcp-session-id, mcp-protocol-version');
+    res.setHeader('access-control-expose-headers', 'mcp-session-id, mcp-protocol-version, www-authenticate');
     res.setHeader('access-control-allow-methods', 'GET, POST, DELETE, OPTIONS');
   }
   if (req.method === 'OPTIONS') return void res.writeHead(204).end();
@@ -76,14 +81,33 @@ const server = createServer(async (req, res) => {
     return json(res, 200, session);
   }
 
+  const header = (n: string) => { const v = req.headers[n]; return Array.isArray(v) ? v[0] : v; };
+  const pubOrigin = publicOrigin({ env: process.env.PUBLIC_BASE_URL?.trim() || undefined, host: header('host'), proto: header('x-forwarded-proto') });
+
+  // Account linking (OAuth 2.1, see oauth.ts): metadata, /authorize, /token, /register.
+  if (url.pathname.startsWith('/.well-known/') || ['/authorize', '/token', '/register'].includes(url.pathname)) {
+    let body = '';
+    if (req.method === 'POST') {
+      try { body = await readRaw(req); } catch { return json(res, 400, { error: 'bad body' }); }
+    }
+    const out = await app.oauth.handle({ method: req.method ?? 'GET', path: url.pathname, query: url.searchParams, header, body, origin: pubOrigin });
+    if (out) return void res.writeHead(out.status, out.headers).end(out.body);
+  }
+
   const rt = routeStore(url.pathname, runtimes);
   if (!rt) return json(res, 404, { error: 'not found' });
 
-  // A forged, foreign-secret or expired session is refused outright (never silently "anonymous").
-  const who = app.identify((n) => { const v = req.headers[n]; return Array.isArray(v) ? v[0] : v; });
+  // A forged, foreign-secret, expired or wrong-audience token is refused outright (never silently "anonymous").
+  const who = app.identify(header, { origin: pubOrigin, path: url.pathname });
+  const resourceMetadata = `${pubOrigin}/.well-known/oauth-protected-resource${url.pathname}`;
   if (!who.ok) {
-    res.setHeader('www-authenticate', `Bearer error="invalid_token", error_description="session ${who.reason}"`);
-    return json(res, 401, { error: `session ${who.reason}`, login: '/auth/demo-login' });
+    const description = who.reason === 'audience' ? 'token was issued for another resource' : `session ${who.reason}`;
+    res.setHeader('www-authenticate', challenge(pubOrigin, url.pathname, { code: 'invalid_token', description }));
+    return json(res, 401, { error: description, login: '/auth/demo-login', resource_metadata: resourceMetadata });
+  }
+  if (who.via === 'none' && process.env.SHOP_COUNTER_REQUIRE_AUTH === '1') {
+    res.setHeader('www-authenticate', challenge(pubOrigin, url.pathname));
+    return json(res, 401, { error: 'sign in: link your Shop Counter account', resource_metadata: resourceMetadata });
   }
 
   let parsed: unknown;

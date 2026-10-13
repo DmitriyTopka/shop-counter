@@ -5,7 +5,7 @@
  * Shopper devices are not search words: "charger for my iPhone 15" searches "charger"
  * and then prefers products the store lists for iPhone 15.
  */
-import { deviceMatch, findDevices, type DeviceInfo } from './devices.js';
+import { deviceLabel, deviceMatch, findDevices, type DeviceInfo } from './devices.js';
 import type { Catalog, CatalogItem, CatalogVariant } from './normalize.js';
 import { joinAnd, money, round2 } from './text.js';
 
@@ -209,7 +209,11 @@ export interface SearchQuery {
 }
 
 export interface DeviceCoverage {
+  /** Devices the store lists by their exact model. Only these may be called "listed for your X". */
   covered: string[];
+  /** Devices the store lists only by series or family: "iPhone 17" for an iPhone 17 Pro. Not proof of fit. */
+  family: { device: string; listed: string }[];
+  /** Devices the store does not list at all. */
   missing: string[];
 }
 
@@ -244,12 +248,24 @@ export interface SearchOutcome {
 /** Which of the shopper's devices does the store list for this item? */
 export function coverageFor(item: CatalogItem, devices: DeviceInfo[]): DeviceCoverage {
   const covered: string[] = [];
+  const family: DeviceCoverage['family'] = [];
   const missing: string[] = [];
   for (const d of devices) {
-    const ok = item.devices.some((e) => deviceMatch(d, e.device) !== null);
-    (ok ? covered : missing).push(d.name);
+    const levels = item.devices.map((e) => ({ e, level: deviceMatch(d, e.device) }));
+    if (levels.some((x) => x.level === 'exact')) covered.push(deviceLabel(d));
+    else {
+      const near = levels.find((x) => x.level !== null);
+      if (near) family.push({ device: deviceLabel(d), listed: near.e.device.name });
+      else missing.push(deviceLabel(d));
+    }
   }
-  return { covered, missing };
+  return { covered, family, missing };
+}
+
+/** "Store lists iPhone 17, not your iPhone 17 Pro specifically" for the first series-only device, else ''. */
+export function familyLine(c: DeviceCoverage): string {
+  const f = c.family[0];
+  return f ? `Store lists ${f.listed}, not your ${f.device} specifically` : '';
 }
 
 function mustHaveOk(item: CatalogItem, term: string): boolean {
@@ -263,7 +279,10 @@ function mustHaveOk(item: CatalogItem, term: string): boolean {
     return (ports[2] ? f.usbCPorts ?? 0 : Math.max(f.totalPorts ?? 0, (f.usbCPorts ?? 0) + (f.usbAPorts ?? 0), f.inOne ?? 0)) >= n;
   }
   const dev = findDevices(t);
-  if (dev.length && !dev[0].device.generic) return coverageFor(item, dev.map((m) => m.device)).missing.length === 0;
+  if (dev.length && !dev[0].device.generic) {
+    const c = coverageFor(item, dev.map((m) => m.device));
+    return c.missing.length === 0 && c.family.length === 0;
+  }
   // Feature words: title, description and extracted features only. Tags are merchandising labels.
   const hay = new Set(tokenize(`${item.title} ${item.source.description} ${item.highlights.join(' ')} ${item.features.connectors.join(' ')} ${item.features.wireless.join(' ')}`));
   return tokenize(t).every((w) => hay.has(w));
@@ -290,6 +309,7 @@ export function buildWhy(item: CatalogItem, variant: CatalogVariant, coverage: D
     const tail = coverage.missing.length ? `, but not for your ${joinAnd(coverage.missing)}` : '';
     why.push(`Store lists it for your ${joinAnd(coverage.covered)}${tail}`);
   }
+  if (coverage.family.length) why.push(familyLine(coverage));
   if (q.maxPrice !== undefined) why.push(`${money(variant.price, currency)}, within your ${money(q.maxPrice, currency)} budget`);
   if (variant.compare_at_price !== null) {
     why.push(`On sale: ${money(round2(variant.compare_at_price - variant.price), currency)} off the regular ${money(variant.compare_at_price, currency)}`);
@@ -397,7 +417,7 @@ export function search(catalog: Catalog, index: SearchIndex, q: SearchQuery): Se
       tailOnly = !headHit && baseTerms.some((t) => variants.get(t)!.some((v) => tail.has(v)));
       if (tailOnly) score *= 0.5;
     }
-    if (!terms.size && devices.length && coverage.covered.length === 0) continue;
+    if (!terms.size && devices.length && coverage.covered.length === 0 && coverage.family.length === 0) continue;
     if (q.category && !categoryOk(doc.item, q.category)) continue;
     if (mustHave.length && !mustHave.every((m) => mustHaveOk(doc.item, m))) continue;
     scored.push({ doc, score, inTitle, coverage, headHit, tailOnly });
@@ -414,7 +434,9 @@ export function search(catalog: Catalog, index: SearchIndex, q: SearchQuery): Se
     if (!oosMatch || s.inTitle > oosMatch.inTitle) oosMatch = { title: s.doc.item.title, inTitle: s.inTitle, item: s.doc.item };
   }
   // If anything is listed for the shopper's devices, recommend only listed products.
+  // Nothing listed for the exact model: the series-only listings come first, and are labeled as such.
   if (devices.length && pool.some((s) => s.coverage.covered.length)) pool = pool.filter((s) => s.coverage.covered.length);
+  else if (devices.length && pool.some((s) => s.coverage.family.length)) pool = pool.filter((s) => s.coverage.family.length);
 
   const maxScore = Math.max(1e-9, ...pool.map((s) => s.score));
   const hits: SearchHit[] = [];
@@ -432,7 +454,7 @@ export function search(catalog: Catalog, index: SearchIndex, q: SearchQuery): Se
       overBudgetCheapest = overBudgetCheapest === null ? variant.price : Math.min(overBudgetCheapest, variant.price);
       continue;
     }
-    const devFrac = devices.length ? s.coverage.covered.length / devices.length : 0;
+    const devFrac = devices.length ? (s.coverage.covered.length + 0.5 * s.coverage.family.length) / devices.length : 0;
     // Covering more of the shopper's devices outranks a better text match (the text part stays
     // below 0.3, under one device step for up to 3 devices); a real markdown only breaks ties.
     const text = terms.size ? 0.17 * s.inTitle + 0.13 * (s.score / maxScore) : 0;

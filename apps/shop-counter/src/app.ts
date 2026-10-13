@@ -11,6 +11,7 @@ import {
   ANONYMOUS, createShelfServer, emptyState, FALLBACK_VIEW_HTML, FileStateStore, sanitizeUserId, ShelfService, shopifyCatalog,
   type Notifier, type ShopperState, type StateStore, type StoreConfig,
 } from 'shelf-to-alexa';
+import { audienceAllows, createOAuth, type OAuthServer } from './oauth.js';
 import { STORES } from './stores.js';
 
 export const SERVER_NAME = 'shop-counter';
@@ -97,16 +98,21 @@ export interface StoreRuntime {
 
 export interface App {
   runtimes: Map<string, StoreRuntime>;
-  /** Who is calling: from a signed session token only (see `identify`). */
-  identify: (header: (name: string) => string | null | undefined) => Identity;
+  /**
+   * Who is calling: from a signed session token only (see `identifyCaller`). With `resource`, an
+   * OAuth access token must have been issued for that MCP endpoint (or the whole server).
+   */
+  identify: (header: (name: string) => string | null | undefined, resource?: ResourceRef) => Identity;
   /** Demo sign-in: a signed session for a demo profile (or a fresh guest). */
   demoLogin: (profile: unknown) => { token: string; user_id: string; profile: string; expires_at: string } | null;
+  /** Account linking: the built-in OAuth 2.1 authorization server (src/oauth.ts). */
+  oauth: OAuthServer;
 }
 
 export function createApp(stores: StoreConfig[] = STORES, state: StateStore = new FileStateStore(STATE_DIR)): App {
   const secret = loadSecret();
   const runtimes = new Map<string, StoreRuntime>();
-  const identify = (header: (name: string) => string | null | undefined) => identifyCaller(header, secret);
+  const identify = (header: (name: string) => string | null | undefined, resource?: ResourceRef) => identifyCaller(header, secret, resource);
   for (const store of stores) {
     const service = new ShelfService({
       catalog: shopifyCatalog(store, { cacheDir: CACHE_DIR }),
@@ -128,7 +134,16 @@ export function createApp(stores: StoreConfig[] = STORES, state: StateStore = ne
     );
     runtimes.set(store.id, { store, service, handler });
   }
-  return { runtimes, identify, demoLogin: (profile) => demoLogin(profile, secret) };
+  const oauth = createOAuth({
+    secret,
+    state,
+    storeIds: stores.map((s) => s.id),
+    storeNames: stores.map((s) => s.name),
+    signAccess: (userId, audience, ttl) => signSession(userId, secret, Date.now(), ttl, audience),
+    shopperFor: (choice) => (DEMO_PROFILES as readonly string[]).includes(choice) ? shopperId(choice) : null,
+    log,
+  });
+  return { runtimes, identify, demoLogin: (profile) => demoLogin(profile, secret), oauth };
 }
 
 /**
@@ -169,45 +184,59 @@ export const DEMO_PROFILES = ['maya', 'sam', 'guest'] as const;
 export const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_PREFIX = 'shop-counter.session.v1.'; // domain separation: an order token is never a session
 
-export type Identity = { ok: true; userId: string; via: 'session' | 'dev-header' | 'none' } | { ok: false; reason: 'invalid' | 'expired' };
+export type Identity = { ok: true; userId: string; via: 'session' | 'dev-header' | 'none' } | { ok: false; reason: 'invalid' | 'expired' | 'audience' };
+
+/** The MCP endpoint being called: public origin + path ("/mcp", "/stores/roborock/mcp"). */
+export interface ResourceRef { origin: string; path: string }
 
 function sessionSig(body: string, secret: string): Buffer {
   return createHmac('sha256', secret).update(SESSION_PREFIX + body).digest();
 }
 
-export function signSession(userId: string, secret: string, now = Date.now(), ttl = SESSION_TTL_MS): string {
-  const body = Buffer.from(JSON.stringify({ u: userId, e: now + ttl })).toString('base64url');
+/**
+ * `audience` (OAuth access tokens only): the resource it was issued for, the whole server (origin) or
+ * one MCP endpoint. Demo-login sessions have none and work at every store, as before.
+ */
+export function signSession(userId: string, secret: string, now = Date.now(), ttl = SESSION_TTL_MS, audience?: string): string {
+  const body = Buffer.from(JSON.stringify(audience ? { u: userId, e: now + ttl, a: audience } : { u: userId, e: now + ttl })).toString('base64url');
   return `${body}.${sessionSig(body, secret).toString('base64url')}`;
 }
 
-export function verifySession(token: string, secret: string, now = Date.now()): Identity {
+export function verifySession(token: string, secret: string, now = Date.now(), resource?: ResourceRef): Identity {
   const [body, sig, extra] = token.trim().split('.');
   if (!body || !sig || extra !== undefined || token.length > 2048) return { ok: false, reason: 'invalid' };
   const want = sessionSig(body, secret);
   const got = Buffer.from(sig, 'base64url');
   if (got.length !== want.length || !timingSafeEqual(got, want)) return { ok: false, reason: 'invalid' };
-  let p: { u?: unknown; e?: unknown };
+  let p: { u?: unknown; e?: unknown; a?: unknown };
   try { p = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch { return { ok: false, reason: 'invalid' }; }
   if (typeof p.u !== 'string' || typeof p.e !== 'number' || sanitizeUserId(p.u) === ANONYMOUS) return { ok: false, reason: 'invalid' };
   if (p.e <= now) return { ok: false, reason: 'expired' };
+  if (p.a !== undefined) {
+    if (typeof p.a !== 'string') return { ok: false, reason: 'invalid' };
+    if (resource && !audienceAllows(p.a, resource.origin, resource.path)) return { ok: false, reason: 'audience' };
+  }
   return { ok: true, userId: p.u, via: 'session' };
 }
 
 /** Bearer session -> that shopper; no credentials -> anonymous; `x-user-id` only with the explicit dev flag. */
-export function identifyCaller(header: (name: string) => string | null | undefined, secret: string): Identity {
+export function identifyCaller(header: (name: string) => string | null | undefined, secret: string, resource?: ResourceRef): Identity {
   const auth = header('authorization');
   if (auth) {
     const m = /^Bearer\s+(\S+)$/i.exec(auth.trim());
-    return m ? verifySession(m[1], secret) : { ok: false, reason: 'invalid' };
+    return m ? verifySession(m[1], secret, Date.now(), resource) : { ok: false, reason: 'invalid' };
   }
   const devUser = header('x-user-id');
   if (devUser && env('SHOP_COUNTER_DEV_USER_HEADER') === '1' && !onLambda) return { ok: true, userId: devUser, via: 'dev-header' };
   return { ok: true, userId: ANONYMOUS, via: 'none' };
 }
 
+/** Demo profile -> shopper id: Maya and Sam are fixed, every guest is new. */
+const shopperId = (profile: string) => (profile === 'guest' ? `guest-${randomBytes(6).toString('hex')}` : `demo-${profile}`);
+
 function demoLogin(profile: unknown, secret: string) {
   if (typeof profile !== 'string' || !(DEMO_PROFILES as readonly string[]).includes(profile)) return null;
-  const userId = profile === 'guest' ? `guest-${randomBytes(6).toString('hex')}` : `demo-${profile}`;
+  const userId = shopperId(profile);
   const now = Date.now();
   return { token: signSession(userId, secret, now), user_id: userId, profile, expires_at: new Date(now + SESSION_TTL_MS).toISOString() };
 }

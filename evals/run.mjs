@@ -13,6 +13,9 @@
 // Plus an honesty audit over EVERY answer: price, stock, compare-at, title, listed devices and evidence
 // quotes vs the raw Shopify feed; every dollar amount spoken must be a real number from the feed or the
 // answer; "yes, it works" only with status confirmed. Any mismatch = a fabricated fact.
+// Since round 3 the audit also checks MEANING for models outside the device dictionary: a confirmed quote
+// must list this model (not "Qrevo Curv" for a Qrevo, not "Upgraded from X"), a robot is never "listed"
+// for another robot, and "X only" is never read as a no for X.
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -155,6 +158,30 @@ function productsIn(sc) {
   return out;
 }
 
+/* ---------- meaning audit for models outside the device dictionary (round 3, 2026-10-13) ----------
+ * The quote being literally in the feed is not enough: "Qrevo" is literally inside "for Qrevo Curv Series",
+ * and "S8 MaxV Ultra" is literally inside "(Upgraded from S8 MaxV Ultra)". Written separately from
+ * packages/shelf on purpose, so the audit does not share the server's blind spots. */
+const GENERIC_AFTER = /^(only|and|or|with|for|in|series|models?|robot|robots|vacuum|cleaner|mop|dock|lds|extended|warranty|replacement|main|side|brush(es)?|cover|filters?|cloths?|bags?|roller|bracket|cordless|wet|dry|stick|white|black)$/i;
+const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Does `text` name `device` as a model the product is for (not a longer model, a predecessor, a comparison or a negation)? */
+function namesAsListing(text, device) {
+  for (const m of text.matchAll(new RegExp(`(?<![\\w-])${esc(device)}(?![\\w-])`, 'gi'))) {
+    const before = text.slice(Math.max(0, m.index - 80), m.index);
+    const after = text.slice(m.index + m[0].length);
+    if (/\b(not\s+(compatible|designed|suitable)\s+(with|for)|incompatible\s+with|(does\s+not|doesn't|won't)\s+(fit|work))\b[^.;:!?]*$/i.test(before) && !/\bother\b[^.;:!?]*$/i.test(before)) continue;
+    if (/\b(upgraded?\s+from|replaces|vs\.?|versus|compared\s+(to|with)|than|successor\s+(to|of))\s+(the\s+)?(\w+\s+)?$/i.test(before)) continue;
+    if (after.startsWith('+')) continue;
+    const next = /^[ \t]+([A-Za-z0-9][\w+]*)/.exec(after)?.[1];
+    if (next && /^\d+$/.test(next) && !/^[ \t]+\d+\s+years?\b/i.test(after)) continue;
+    if (next && !/^\d+$/.test(next) && /^[A-Z]|\d/.test(next) && !GENERIC_AFTER.test(next)) continue;
+    return true;
+  }
+  return false;
+}
+const isWholeDevice = (p) => /\bvacuums?\b/i.test(p.product_type ?? '') && !/accessor|warrant|trade|point/i.test(p.product_type ?? '');
+const offStoreBrand = (store, name) => name.replace(new RegExp(`^${esc(store)}\\s+`, 'i'), '');
+
 /** Honesty audit of one answer. Returns a list of fabricated facts (empty = honest). */
 function audit(store, r, input) {
   const R = raw[store];
@@ -183,6 +210,11 @@ function audit(store, r, input) {
         const dev = parseDevice(name);
         const literal = hay.some((h) => { const i = h.toLowerCase().indexOf(name.toLowerCase()); return i >= 0 && !/\b(not|n't)\s+\w+\s+(with|for)?[^.;]*$/i.test(h.slice(Math.max(0, i - 80), i)); });
         if (!listed.some((x) => deviceMatch(dev, x)) && !(dev.known === false && literal)) bad.push(`${p.title}: claims it is listed for ${name}`);
+        if (dev.known === false) {
+          const n = offStoreBrand(store, name);
+          if (isWholeDevice(hit.p)) bad.push(`${p.title}: claims a device is listed for ${name}`);
+          else if (!hay.some((h) => namesAsListing(h, n) || new RegExp(`(?<![\\w-])${esc(n)}\\s+series\\b`, 'i').test(h))) bad.push(`${p.title}: listed for ${name} only by substring`);
+        }
       }
     }
   }
@@ -204,11 +236,24 @@ function audit(store, r, input) {
     if (/\b(not|n't)\s+(compatible|work|fit)\w*\s+(with|for|on)?\b|\bincompatible\b/i.test(q) && new RegExp(`(not|n't)\\s+\\w+\\s+(with|for|on)?[^.;]*${v.device.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(q)) {
       bad.push(`confirmed ${v.device} from a negation: "${q}"`);
     }
+    // Meaning, not just a literal quote: for a model outside the dictionary the quote must list THIS model.
+    if (!dev.known) {
+      const n = offStoreBrand(store, v.device);
+      const feedP = R.variants.get(String(sc.product?.id))?.p;
+      if (feedP && isWholeDevice(feedP)) bad.push(`confirmed ${v.device} for a product that is itself a device: "${feedP.title}"`);
+      else if (!namesAsListing(q, n) && !new RegExp(`(?<![\\w-])${esc(n)}\\s+series\\b`, 'i').test(q)) bad.push(`confirmed ${v.device} from a quote that names another model or no fit: "${q}"`);
+    }
     if (v.evidence.source === 'tags') {
       const tag = q.replace(/^device:\s*/i, '').trim().toLowerCase();
       const m = findDevices(q.replace(/^device:\s*/i, ''));
       if (tag !== v.device.toLowerCase() && !(m.length === 1 && /^[\s\w]*$/.test(tag.slice(m[0].raw.length)))) bad.push(`confirmed ${v.device} from a merchandising tag "${q}"`);
     }
+  }
+  // A "no" must be the store's no for THIS model: "X only (Incompatible with other models ...)" is a yes for X.
+  for (const v of verdicts) {
+    if (v.status !== 'incompatible' || !v.evidence) continue;
+    const n = offStoreBrand(store, v.device);
+    if (new RegExp(`(?<![\\w-])${esc(n)}\\s+only\\b`, 'i').test(v.evidence.quote)) bad.push(`incompatible ${v.device} from a quote that says "${n} only": "${v.evidence.quote}"`);
   }
   // Spoken "yes" about compatibility only with a confirmed status.
   if (sc.kind === 'compat' && sc.status !== 'confirmed' && /^(yes|it (will|does) work|that works)/i.test(r.text)) bad.push(`says yes with status ${sc.status}`);

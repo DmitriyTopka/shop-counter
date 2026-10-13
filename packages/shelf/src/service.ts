@@ -6,7 +6,7 @@
 import { randomBytes } from 'node:crypto';
 import type { CatalogSource, LoadedCatalog } from './catalog.js';
 import { checkCompat } from './compat.js';
-import { devicesInText, parseDevice, type DeviceInfo } from './devices.js';
+import { deviceKind, deviceLabel, devicesInText, parseDevice, type DeviceInfo, type DeviceKind } from './devices.js';
 import { toProduct, type CatalogItem, type CatalogVariant } from './normalize.js';
 import { budgetFromText, correctTypos, coverageFor, search, tokenize } from './search.js';
 import type { ShopperState, StateStore } from './state.js';
@@ -39,6 +39,17 @@ export interface ShelfServiceConfig {
 export const ANONYMOUS = 'anonymous';
 /** "my phone", "the laptop": a kind of device, not a model. The closet says which one the shopper has. */
 const DEVICE_KIND_ONLY = /^(?:(?:my|the|a|an|this)\s+)?(?:phone|smartphone|cell ?phone|mobile|laptop|computer|notebook|tablet|robot|vacuum|robot vacuum|device|gadget|stuff|it)$/i;
+/** Which closet devices a kind word can mean. Absent = any device ("my stuff", "it"). */
+const KIND_WORDS: [RegExp, DeviceKind[]][] = [
+  [/\b(phone|smartphone|cell ?phone|mobile)$/i, ['phone']],
+  [/\b(laptop|notebook)$/i, ['laptop']],
+  [/\bcomputer$/i, ['laptop', 'desktop']],
+  [/\btablet$/i, ['tablet']],
+  [/\b(robot|vacuum|robot vacuum)$/i, ['robot']],
+];
+const KIND_NOUN: Record<string, string> = { phone: 'phone', laptop: 'laptop', desktop: 'computer', tablet: 'tablet', robot: 'robot', watch: 'watch', earbuds: 'earbuds', other: 'device' };
+/** Case-insensitive identity of a remembered device: the model plus what the shopper added about it. */
+const deviceKey = (raw: string) => deviceLabel(parseDevice(raw)).toLowerCase();
 const MAX_DEVICES = 20;
 const MAX_LINES = 10;
 const MAX_QTY = 10;
@@ -136,6 +147,13 @@ export class ShelfService {
     return s.closet.devices.map((d) => this.localDevice(parseDevice(d)));
   }
 
+  /** The closet devices a kind word ("my phone") can mean, or all of them for "it" / no word. */
+  private async closetFor(userId: string, said: string): Promise<DeviceInfo[]> {
+    const all = await this.closetDevices(userId);
+    const kinds = KIND_WORDS.find(([re]) => re.test(said.trim()))?.[1];
+    return kinds ? all.filter((d) => kinds.includes(deviceKind(d))) : all;
+  }
+
   /* ---------------- find_products ---------------- */
 
   async findProducts(
@@ -150,9 +168,10 @@ export class ShelfService {
 
     // Typos are fixed against the store's own words before anything else ("macbok" -> "macbook").
     const fixed = correctTypos(need, loaded.index).text;
-    const named = [...cleanList(input.for_devices).map(parseDevice), ...devicesInText(fixed)];
+    // A device named in the request beats the closet: "a charger for my Pixel" is not about the iPhone on file.
+    const named = [...cleanList(input.for_devices).map((d) => this.localDevice(parseDevice(d))), ...devicesInText(fixed)];
     const devices = named.length ? named : await this.closetDevices(userId);
-    const uniq = devices.filter((d, i) => devices.findIndex((x) => x.name === d.name) === i);
+    const uniq = devices.filter((d, i) => devices.findIndex((x) => deviceLabel(x) === deviceLabel(d)) === i);
 
     const out = search(loaded.catalog, loaded.index, {
       need: fixed,
@@ -166,7 +185,7 @@ export class ShelfService {
       kind: 'products',
       store: this.store.name,
       need,
-      for_devices: uniq.map((d) => d.name),
+      for_devices: uniq.map(deviceLabel),
       max_price: maxPrice ?? null,
       products,
       more_available: out.more,
@@ -199,9 +218,18 @@ export class ShelfService {
       const lead = notHere || `The ${spokenTitle(out.outOfStockMatch!.title)} is out of stock right now.`;
       return ok(`${lead} The closest match is the ${spokenTitle(top.item.title)} at ${money(top.variant.price, cur)}.`, structured);
     }
-    const fit = top.coverage.covered.length ? `, and the store lists it for your ${joinAnd(top.coverage.covered)}` : '';
+    const fam = top.coverage.family[0];
+    const fit = top.coverage.covered.length
+      ? `, and the store lists it for your ${joinAnd(top.coverage.covered)}`
+      : fam ? `. The store lists it for ${fam.listed}, not your ${fam.device} specifically` : '';
     const count = products.length === 1 ? 'one option' : `${products.length} options`;
-    const text = `I found ${count}. The best fit is the ${spokenTitle(top.item.title)} at ${money(top.variant.price, this.store.currency)}${fit}.`;
+    const best = `The best fit is the ${spokenTitle(top.item.title)} at ${money(top.variant.price, this.store.currency)}`;
+    // A bare family ("my Pixel") cannot be checked: ask for the model instead of borrowing one from the closet.
+    const vague = uniq.find((d) => d.generic);
+    if (vague && !top.coverage.covered.length) {
+      return ok(`${best}. Which ${vague.name} model do you have, so I can check the fit?`, structured);
+    }
+    const text = fam && !top.coverage.covered.length ? `${best}${fit}.` : `I found ${count}. ${best}${fit}.`;
     return ok(text, structured);
   }
 
@@ -240,7 +268,7 @@ export class ShelfService {
       { label: 'Traits', values: entries.map((e) => e.item.features.traits.join(', ') || null) },
     ];
     if (devices.length) {
-      rows.push({ label: 'Listed for your devices', values: cov.map((c) => (c.covered.length ? c.covered.join(', ') : 'None listed')) });
+      rows.push({ label: 'Listed for your devices', values: cov.map((c) => (c.covered.length ? c.covered.join(', ') : c.family.length ? `Only ${c.family.map((f) => f.listed).join(', ')}` : 'None listed')) });
     } else {
       rows.push({ label: 'Store lists', values: entries.map((e) => (e.item.compatibleWith.length ? e.item.compatibleWith.slice(0, 4).join(', ') + (e.item.compatibleWith.length > 4 ? ` +${e.item.compatibleWith.length - 4} more` : '') : null)) });
     }
@@ -296,8 +324,19 @@ export class ShelfService {
     const raw = typeof input.device === 'string' ? input.device.trim().slice(0, 80) : '';
     const said = raw && !DEVICE_KIND_ONLY.test(raw) ? [this.localDevice(parseDevice(raw))] : [];
     const fromCloset = said.length === 0;
-    const devices = fromCloset ? await this.closetDevices(userId) : said;
-    if (!devices.length) return fail('device_required', 'Which device should I check it with?');
+    const devices = fromCloset ? await this.closetFor(userId, raw) : said;
+    const kindWord = raw && KIND_WORDS.some(([re]) => re.test(raw));
+    if (!devices.length) {
+      const noun = kindWord ? raw.replace(/^(?:my|the|a|an|this)\s+/i, '') : 'device';
+      return fail('device_required', `Which ${noun} should I check it with?`);
+    }
+    // "my phone" with two phones on file: ask, never pick one silently.
+    if (kindWord && devices.length > 1) {
+      const options = devices.map(deviceLabel);
+      const noun = KIND_NOUN[deviceKind(devices[0])] ?? 'device';
+      const t = clampSpeech(`Which ${noun} should I check: your ${joinAnd(options).replace(/ and /, ' or ')}?`);
+      return { text: t, structured: { kind: 'error', code: 'device_ambiguous', message: t, options }, isError: true };
+    }
 
     const verdicts = devices.map((d) => ({ d, v: checkCompat(hit.item, d) }));
     const main = verdicts[0];
@@ -312,34 +351,32 @@ export class ShelfService {
         .sort((a, b) => b.sim - a.sim || Math.abs(a.it.primary.price - hit.variant.price) - Math.abs(b.it.primary.price - hit.variant.price))
         .map((x) => x.it)
         .slice(0, 3);
-      for (const it of alts) alternatives.push(this.product(it, it.primary, [`Store lists it for your ${main.d.name}`]));
+      for (const it of alts) alternatives.push(this.product(it, it.primary, [`Store lists it for your ${deviceLabel(main.d)}`]));
     }
 
     const structured: CompatResult = {
       kind: 'compat',
       product: this.product(hit.item, hit.variant),
-      device: main.d.name,
+      device: deviceLabel(main.d),
       status: main.v.status,
       evidence: main.v.evidence,
       note: main.v.note,
       alternatives,
-      ...(verdicts.length > 1 ? { also: verdicts.slice(1).map(({ d, v }) => ({ device: d.name, status: v.status, evidence: v.evidence })) } : {}),
+      ...(verdicts.length > 1 ? { also: verdicts.slice(1).map(({ d, v }) => ({ device: deviceLabel(d), status: v.status, evidence: v.evidence })) } : {}),
       device_source: fromCloset ? 'closet' : 'said',
     };
 
     const name = spokenTitle(hit.item.title);
-    const d = main.d.name;
-    const broad = main.v.level === 'series' || main.v.level === 'family';
+    const d = deviceLabel(main.d);
     let text: string;
     if (main.v.status === 'confirmed' && fromCloset) {
-      // The shopper never named the model: the closet did. Say whose device it is and who vouches for it.
-      text = broad
-        ? `Works with your ${d}: the store lists ${main.v.evidence?.quote ?? d} for it.`
-        : `Works with your ${d}, the store confirms it.`;
+      // The shopper never named the model: the closet did. Say whose device it is and what the store says.
+      text = `The store lists your ${d} for the ${name}.`;
     } else if (main.v.status === 'confirmed') {
-      text = broad
-        ? `Yes, the store lists ${main.v.evidence?.quote ?? d} for the ${name}, which covers your ${d}.`
-        : `Yes, the store lists the ${d} for the ${name}.`;
+      text = `Yes, the store lists the ${d} for the ${name}.`;
+    } else if (main.v.status === 'family_only') {
+      // The store names the series only: say what it lists and that the exact model is not among it.
+      text = `The store lists ${main.v.evidence?.quote ?? 'only the series'}, not your ${d} specifically.`;
     } else if (main.v.status === 'incompatible') {
       // Quote the store's own "not compatible with ..." when that is the reason; a connector rule is explained instead.
       const clause = main.v.evidence?.quote.match(/\bnot\s+(?:compatible|designed|suitable|for\s+use)\s+(?:with|for)\s+[^.;:!?()\]]+/i)?.[0].trim();
@@ -356,7 +393,7 @@ export class ShelfService {
       // A "no" always comes with a real way forward from the same store.
       text += ` The ${spokenTitle(alternatives[0].title)} is listed for it, at ${money(alternatives[0].price, this.store.currency)}.`;
     } else if (others.length) {
-      const yes = others.filter((o) => o.v.status === 'confirmed').map((o) => o.d.name);
+      const yes = others.filter((o) => o.v.status === 'confirmed').map((o) => deviceLabel(o.d));
       if (yes.length) text += ` It's also listed for your ${joinAnd(yes)}.`;
     }
     return ok(text, structured);
@@ -370,14 +407,16 @@ export class ShelfService {
   ): Promise<ToolOutcome> {
     if (userId === ANONYMOUS) return fail('anonymous', "I can only remember your devices when you're signed in.");
     // "a Roborock Q7 M5" -> "Roborock Q7 M5": articles are speech, not part of the model name.
+    // The closet keeps the device as the shopper named it ("MacBook Pro 2017 Intel"), with the model's
+    // own spelling when that is all they said ("iphone 17 pro" -> "iPhone 17 Pro"). Parsing is for matching only.
     const add = cleanList(input.devices).map((d) => d.replace(/^(?:a|an|the|my)\s+/i, '')).filter((d) => d && !DEVICE_KIND_ONLY.test(d))
-      .map((d) => { const p = parseDevice(d); return p.known ? p.name : p.name.slice(0, 60); });
-    const forget = cleanList(input.forget).map((d) => parseDevice(d).name.toLowerCase());
+      .map((d) => deviceLabel(parseDevice(d)).slice(0, 60));
+    const forget = cleanList(input.forget).map(deviceKey);
     const pets = cleanList(input.home?.pets, 40);
     const notes = typeof input.home?.notes === 'string' ? input.home.notes.trim().slice(0, 300) : undefined;
     const s = await this.cfg.state.update(userId, (st) => {
-      let devices = st.closet.devices.filter((d) => !forget.includes(d.toLowerCase()));
-      for (const d of add) if (!devices.some((x) => x.toLowerCase() === d.toLowerCase())) devices.push(d);
+      let devices = st.closet.devices.filter((d) => !forget.includes(deviceKey(d)));
+      for (const d of add) if (!devices.some((x) => deviceKey(x) === deviceKey(d))) devices.push(d);
       devices = devices.slice(-MAX_DEVICES);
       const home = { ...st.closet.home };
       if (pets.length) home.pets = [...new Set([...(home.pets ?? []), ...pets.map((p) => p.toLowerCase())])].slice(0, 10);
@@ -401,14 +440,14 @@ export class ShelfService {
   }
 
   private closetResult(s: ShopperState, suggestion: ClosetSuggestion | null = null): ClosetResult {
-    return { kind: 'closet', devices: s.closet.devices, home: s.closet.home, store: this.store.name, suggestion };
+    const items = s.closet.devices.map((name) => ({ name, kind: deviceKind(this.localDevice(parseDevice(name))) }));
+    return { kind: 'closet', devices: s.closet.devices, items, home: s.closet.home, store: this.store.name, suggestion };
   }
 
   private closetSpeech(s: ShopperState, suggestion: ClosetSuggestion | null = null): string {
     if (!s.closet.devices.length) return "I don't know your devices yet. Tell me what you use, like an iPhone 15 or a MacBook Air.";
-    // Two sentences at most: the suggestion takes the place of the pets line (both stay on screen).
-    const pets = !suggestion && s.closet.home.pets?.length ? ` At home: ${joinAnd(s.closet.home.pets.map((p) => `a ${p}`))}.` : '';
-    return `You have ${joinAnd(s.closet.devices)}.${pets}${this.suggestionSpeech(suggestion)}`;
+    // Devices only: home notes and pets stay on the screen, they are not read out on a shared speaker.
+    return `You have ${joinAnd(s.closet.devices)}.${this.suggestionSpeech(suggestion)}`;
   }
 
   private suggestionSpeech(x: ClosetSuggestion | null): string {
@@ -440,7 +479,7 @@ export class ShelfService {
         if (!best || v.price < best.item.primary.price) best = { item, evidence: c.evidence };
       }
       if (best) {
-        return { device: d.name, product: this.product(best.item, best.item.primary, [`Store lists it for your ${d.name}`]), evidence: best.evidence };
+        return { device: deviceLabel(d), product: this.product(best.item, best.item.primary, [`Store lists it for your ${deviceLabel(d)}`]), evidence: best.evidence };
       }
     }
     return null;

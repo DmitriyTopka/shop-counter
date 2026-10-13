@@ -19,11 +19,11 @@
     {
       "id": "sam",
       "name": "Sam",
-      "blurb": "cat owner, small apartment",
+      "blurb": "Roborock Saros 10R owner",
       "store": "Roborock",
       "mcpPath": "/stores/roborock/mcp",
       "try": [
-        "Find a robot vacuum under $300, I have a cat",
+        "Find a robot vacuum under $300",
         "Compare them",
         "Order the third one",
         "Confirm",

@@ -1,4 +1,4 @@
-// Wraps any MCP Transport and reports every JSON-RPC message in both directions (ported from spike/src/shared).
+// Wraps any MCP Transport and reports every JSON-RPC message in both directions (ported from our first protocol spike).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type LogFn = (dir: '->' | '<-' | '!!', msg: unknown) => void;
 

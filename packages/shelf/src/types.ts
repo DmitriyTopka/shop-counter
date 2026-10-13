@@ -93,7 +93,12 @@ export interface CompareResult {
   verdict: string;
 }
 
-export type CompatStatus = 'confirmed' | 'not_listed' | 'incompatible';
+/**
+ * confirmed: the store names this exact model. family_only (v1.6): the store names only the series or
+ * family ("iPhone 17" for an iPhone 17 Pro), which is not proof of fit. not_listed: the store is silent.
+ * incompatible: the store rules it out, or the connector cannot fit.
+ */
+export type CompatStatus = 'confirmed' | 'family_only' | 'not_listed' | 'incompatible';
 
 export interface CompatResult {
   kind: 'compat';
@@ -117,9 +122,14 @@ export interface ClosetSuggestion {
   evidence: Evidence;
 }
 
+export type DeviceKindName = 'phone' | 'laptop' | 'tablet' | 'desktop' | 'watch' | 'earbuds' | 'robot' | 'other';
+
 export interface ClosetResult {
   kind: 'closet';
+  /** Each device as the shopper named it ("MacBook Pro 2017 Intel"). */
   devices: string[];
+  /** v1.6: the same devices with their kind, for icons. Same order as `devices`. */
+  items?: { name: string; kind: DeviceKindName }[];
   home: Closet['home'];
   /** The store that answered. The closet itself belongs to the shopper and is shared by every store. */
   store?: string;
@@ -160,6 +170,7 @@ export type ErrorCode =
   | 'out_of_stock'
   | 'invalid_input'
   | 'device_required'
+  | 'device_ambiguous'
   | 'anonymous'
   | 'token_invalid'
   | 'token_expired'
@@ -172,6 +183,8 @@ export interface ErrorResult {
   kind: 'error';
   code: ErrorCode;
   message: string;
+  /** v1.6, device_ambiguous only: the remembered devices that fit what the shopper said ("my phone"). */
+  options?: string[];
 }
 
 export type StructuredResult =

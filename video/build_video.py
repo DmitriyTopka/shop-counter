@@ -1,11 +1,17 @@
-"""Assemble the Shop Counter demo (1920x1080, H.264 + AAC), adapted from T_opencv/video/build_video.py.
-Inputs: frames/raw/*.png (record.mjs, live Lambda + Claude Haiku), audio/*.wav (tts.py), lines.json,
-capture/transcript.json. Output: shop_counter_demo_v2.mp4, frames/v2_check_*.jpg (9 control stills),
-capture/timeline_v2.json (start, length, lines per segment, used by script.md). v1 is commit cf5e564.
+"""Assemble the Shop Counter demo v4 (1920x1080, H.264 + AAC).
+Inputs: frames/raw/*.png and capture/transcript_v4.json (record.mjs on the hosted simulator: live Lambda MCP server,
+Claude Haiku 5.5 brain called from the Lambda), audio_v4/*.wav (tts.py), lines.json.
+Output: shop_counter_demo_v4.mp4, frames/v4_check_*.jpg (control stills), capture/timeline_v4.json (used by script.md).
+Earlier cuts: v1 cf5e564, v2 a0e19f1, v3 1dd09ca (git history of this file).
+v4: one short card after the hook, a tap on the screen, account linking, Sam's memory shown across two stores,
+a readable push-in on the JSON-RPC log, links on the final card, a quiet synthesized pad under the voices,
+loudness set to -16 LUFS in two passes, with a compressor and a limiter on 4x oversampled audio so the true peak stays under -1 dBTP after AAC.
 """
 import json
 import pathlib
+import re
 import subprocess
+import tempfile
 import wave
 
 import cv2
@@ -14,52 +20,69 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = pathlib.Path(__file__).parent
+TMP = pathlib.Path(tempfile.mkdtemp(prefix="sc_v4_"))
 W, H, FPS, SR = 1920, 1080, 30, 48000
 BG = (9, 13, 26)
 INK = (245, 247, 250)
 MUTED = (150, 160, 178)
 ACCENT = (43, 198, 255)
-GREEN = (52, 199, 120)
-LABEL = {"narrator": None, "maya": ("MAYA", (255, 170, 90)), "sam": ("SAM", (255, 170, 90)), "alexa": ("ALEXA", ACCENT)}
+LABEL = {"narrator": None, "maya": ("MAYA", (255, 170, 90)), "sam": ("SAM", (120, 220, 160)), "alexa": ("ALEXA", ACCENT)}
 FONT = "/System/Library/Fonts/Helvetica.ttc"
+MONO = "/System/Library/Fonts/Menlo.ttc"
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 XFADE = 0.35
-# v2 (13.10): bigger Echo Show with a slow push-in, the simulator's Alexa caption faded out of the shot and
-# Alexa's words in our own subtitle under the device, one TTS model for every line, gentler speed-up.
-AUDIO_DIR = "audio_v2"
-OUT_NAME = "shop_counter_demo_v2.mp4"
-TEMPO = {"narrator": 1.10, "maya": 1.04, "sam": 1.04, "alexa": 1.24}  # v1: 1.12 / 1.08 / 1.08 / 1.28
-CHECKS = {"hook_say": 1, "m01_say": 2, "m02_say": 3, "m04_say": 4, "m05_say": 5, "m07_say": 6, "s03_say": 7, "s04_say": 8, "tech": 9}
-DEV = {"maya": (800, 338, 3040, 1629), "sam": (800, 379, 3040, 1670)}  # device in the 4K screenshots (bbox x2)
-SCR_X = (836, 3003)
-SCR_Y = {"maya": (374, 1595), "sam": (415, 1636)}
-DEV_H = 820  # device height on the 1080p canvas; the subtitle band lives under it
+AUDIO_DIR = "audio_v4"
+OUT_NAME = "shop_counter_demo_v4.mp4"
+TEMPO = {"narrator": 1.08, "maya": 1.04, "sam": 1.04, "alexa": 1.18}  # same as v3
+DEV_H = 820  # height of the picture area on the 1080p canvas; the subtitle band lives under it
+SIM_URL = "https://x2uph6avweit5yuv5crwm474240pwtzb.lambda-url.us-east-1.on.aws/sim/"
+REPO = "https://github.com/DmitriyTopka/shop-counter"
 DISCLAIMER = "Not affiliated with Satechi or Roborock, public catalogs"
 
 cfg = json.load(open(HERE / "lines.json"))
-said = {r["key"]: r["alexa"] for f in json.load(open(HERE / "capture/transcript.json")).values() for r in f["flow"]}
-boxes = {k: v["device"] for k, v in json.load(open(HERE / "capture/transcript.json")).items()}
-boxes["maya"] = {**boxes["maya"], "x": boxes["sam"]["x"]}  # maya's box was measured with the log panel open
+cap = json.load(open(HERE / "capture/transcript_v4.json"))
+said = {r["key"]: r["alexa"] for f in cap.values() if "flow" in f for r in f["flow"]}
+META = {k: v for f in cap.values() for k, v in f.get("frames", {}).items()}
 
 
 def font(size, bold=False):
     return ImageFont.truetype(FONT, size, index=1 if bold else 0)
 
 
+def drop_tail_burst(a):
+    """Gemini TTS sometimes ends a clip with a short full-scale noise burst after the speech (m_s1: 0.13 s at 0 dBFS
+    after 0.25 s of silence). Cut it at the silence before it."""
+    q = np.abs(a) > 0.01
+    idx = np.where(q)[0]
+    if not len(idx):
+        return a
+    tail = int(0.6 * SR)
+    for j in range(len(idx) - 1, 0, -1):
+        if idx[j] - idx[j - 1] > int(0.15 * SR):  # a gap of silence
+            if len(a) - idx[j] < tail and np.abs(a[idx[j]:]).max() > 0.9:
+                return a[:idx[j - 1] + int(0.1 * SR)]
+            break
+    return a
+
+
 def read_wav(p, tempo=1.0):
     """WAV -> float32 at 48 kHz, sped up with ffmpeg atempo (pitch kept), leading/trailing silence trimmed."""
     if tempo != 1.0:
-        tmp = f"/tmp/sc_tempo_{p.stem}.wav"
-        subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-i", str(p), "-filter:a", f"atempo={tempo}", "-ac", "1", tmp], check=True)
-        p = pathlib.Path(tmp)
+        tmp = TMP / f"tempo_{p.stem}.wav"
+        subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-i", str(p), "-filter:a", f"atempo={tempo}", "-ac", "1", str(tmp)], check=True)
+        p = tmp
     with wave.open(str(p)) as w:
         a = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32768
         src = w.getframerate()
     t = np.arange(int(len(a) * SR / src)) / SR
     a = np.interp(t, np.arange(len(a)) / src, a).astype(np.float32)
+    a = drop_tail_burst(a)
     loud = np.where(np.abs(a) > 0.02)[0]
     if len(loud):
-        a = a[max(0, loud[0] - int(0.05 * SR)): loud[-1] + int(0.12 * SR)]
+        a = a[max(0, loud[0] - int(0.05 * SR)): loud[-1] + int(0.12 * SR)].copy()
+    f = int(0.01 * SR)  # 10 ms fades: a hard cut at the trim point is a click, and AAC turns clicks into peaks
+    a[:f] *= np.linspace(0, 1, f)
+    a[-f:] *= np.linspace(1, 0, f)
     return a
 
 
@@ -81,265 +104,303 @@ def wrap(d, text, f, width):
     return lines
 
 
-def band(d, k, y0):
-    """Subtitle band: speaker pill + big text. Alexa's words are already on the device screen, so only the pill."""
+def band(d, k, y0, size=42):
+    """Subtitle band: speaker pill + the line."""
     who = cfg["lines"][k]["voice"]
     lab = LABEL[who]
     x = 90
     if lab:
         f = font(30, True)
         tw = d.textlength(lab[0], font=f)
-        d.rounded_rectangle([x, y0 + 14, x + tw + 36, y0 + 60], 23, fill=lab[1])
-        d.text((x + 18, y0 + 20), lab[0], font=f, fill=BG)
+        d.rounded_rectangle([x, y0 + 12, x + tw + 36, y0 + 58], 23, fill=lab[1])
+        d.text((x + 18, y0 + 18), lab[0], font=f, fill=BG)
         x += tw + 60
-    f = font(44, who != "narrator")
+    f = font(size, who != "narrator")
     for i, line in enumerate(wrap(d, text_of(k), f, W - x - 90)[:3]):
-        d.text((x, y0 + 12 + i * 56), line, font=f, fill=INK if who != "narrator" else (220, 226, 236))
+        d.text((x, y0 + 10 + i * int(size * 1.27)), line, font=f, fill=INK if who != "narrator" else (220, 226, 236))
 
 
-def shot(frame, k=None, crop="device", tag=None, foot=None):
-    if crop == "device":
-        return DShot(frame, k, tag, foot)
-    raw = Image.open(HERE / f"frames/raw/{frame}.png").convert("RGB")
-    sx = raw.width / W
+def base_canvas(keys=(), tag=None, foot=None):
+    """Background with the tag and the subtitles of the segment's lines (the last line that is spoken wins)."""
     im = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(im)
-    nlines = 0
-    if k and cfg["lines"][k]["voice"] != "alexa":
-        f = font(44)
-        nlines = len(wrap(d, text_of(k), f, W - 400))
-    band_h = 150 if nlines <= 2 else 200
-    if crop == "device":
-        b = boxes[frame.split("_")[0]]
-        pad = 14
-        s = raw.crop([int((b["x"] - pad) * sx), int((b["y"] - pad) * sx), int((b["x"] + b["width"] + pad) * sx), int((b["y"] + b["height"] + pad) * sx)])
-    elif crop:
-        s = raw.crop([int(v * sx) for v in crop])
-    else:
-        s = raw
-    avail = H - band_h - 20
-    scale = min((W - 40) / s.width, avail / s.height)
-    s = s.resize((int(s.width * scale), int(s.height * scale)), Image.LANCZOS)
-    im.paste(s, ((W - s.width) // 2, 14 + (avail - s.height) // 2))
     if tag:
-        f = font(28, True)
-        tw = d.textlength(tag, font=f)
-        d.rounded_rectangle([40, 30, 40 + tw + 40, 80], 25, fill=(20, 30, 52), outline=ACCENT, width=2)
-        d.text((60, 39), tag, font=f, fill=INK)
-    if k:
-        band(d, k, H - band_h)
+        d.text((90, DEV_H + 18), tag.upper(), font=font(26, True), fill=ACCENT)
+    if keys:
+        band(d, keys[-1], DEV_H + (46 if tag else 22))
     if foot:
         d.text((W - 40 - d.textlength(foot, font=font(22)), H - 34), foot, font=font(22), fill=MUTED)
-    return im
+    return np.asarray(im).astype(np.float32)
 
 
-def card(title, sub="", foot="", title_color=INK, lines=None, small=None, k=None):
-    im = Image.new("RGB", (W, H), BG)
-    d = ImageDraw.Draw(im)
-    d.ellipse([140, 150, 176, 186], fill=ACCENT)
-    d.text((196, 146), "Shop Counter", font=font(36, True), fill=MUTED)
-    y = 300 if not lines else 250
-    for line in wrap(d, title, font(84, True), 1640):
-        d.text((140, y), line, font=font(84, True), fill=title_color)
-        y += 104
-    y += 20
-    for line in wrap(d, sub, font(46), 1640) if sub else []:
-        d.text((140, y), line, font=font(46), fill=MUTED)
-        y += 64
-    for a, b in lines or []:
-        d.text((140, y + 10), a, font=font(40, True), fill=ACCENT)
-        d.text((640, y + 10), b, font=font(40), fill=INK)
-        y += 70
-    if foot:
-        d.text((140, 800 if k else 930), foot, font=font(34), fill=ACCENT)
-    if small:
-        d.text((140, 860 if k else 1000), small, font=font(24), fill=MUTED)
-    if k:  # narration subtitles on cards too
-        bh = 40 + 56 * len(wrap(d, text_of(k), font(44), W - 180)[:3])
-        d.line([90, H - bh - 20, W - 90, H - bh - 20], fill=(40, 52, 80), width=2)
-        band(d, k, H - bh)
-    return im
+class Shot:
+    """A picture from a 4K screenshot that moves: a push-in from view v0 to view v1 (boxes in screenshot pixels),
+    optionally with a tap: a finger dot that presses and a ring that spreads at `tap` (screenshot pixels)."""
 
+    def __init__(self, frame, v0, v1, p=(0.0, 1.0), keys=(), tag=None, foot=None, tap=None, area_w=1840, hold=1.0):
+        self.img = np.asarray(Image.open(HERE / f"frames/raw/{frame}.png").convert("RGB")).astype(np.float32)
+        hh, ww = self.img.shape[:2]
+        lim = np.array([ww, hh, ww, hh], np.float32)
+        self.v0, self.v1 = (np.clip(np.array(v, np.float32), 0, lim) for v in (v0, v1))
+        self.p = p
+        self.hold = hold  # the push-in ends at this share of the segment, then holds
+        self.tap = tap
+        self.area_w = area_w
+        self.keys = list(keys)
+        self.tag, self.foot = tag, foot
+        self.base = base_canvas(keys, tag, foot)
 
-def caption_top(a, sy):
-    """Top of the simulator's Alexa caption: its accent border is the only long vertical cyan run that reaches the
-    bottom of the screen, in the left part. None when no caption is on screen."""
-    y0 = sy[0] + int((sy[1] - sy[0]) * 0.35)
-    sub = a[y0:sy[1] - 20, SCR_X[0]:SCR_X[0] + 900].astype(int)
-    m = (sub[:, :, 1] > 80) & (sub[:, :, 2] > 110) & (sub[:, :, 0] < 70) & (sub[:, :, 2] > sub[:, :, 1])
-    best = None
-    for c in np.where(m.sum(axis=0) >= 100)[0]:
-        idx = np.where(m[:, c])[0]
-        r = max(np.split(idx, np.where(np.diff(idx) > 3)[0] + 1), key=len)
-        if len(r) >= 100 and r[-1] > m.shape[0] - 140 and (best is None or len(r) > best[1]):
-            best = (int(r[0]), len(r))
-    return None if best is None else y0 + best[0] - 26
-
-
-class DShot:
-    """A device shot that moves: the Echo Show from a 4K screenshot, the simulator caption faded out, and a slow
-    push-in from the whole device to the part of the screen that still has content (the screen grows on the canvas)."""
-    MAX_W = 1720  # widest the screen may get on the canvas
-
-    def __init__(self, frame, k=None, tag=None, foot=None):
-        flow = frame.split("_")[0]
-        a = np.asarray(Image.open(HERE / f"frames/raw/{frame}.png").convert("RGB")).astype(np.float32)
-        sy = SCR_Y[flow]
-        cap = caption_top(a.astype(np.uint8), sy)
-        if cap:  # fade the screen into its own background just above the caption, keep the light bar
-            for y in range(cap - 60, sy[1] - 24):
-                al = min(1.0, max(0.0, (y - (cap - 60)) / 60))
-                bg = a[y, SCR_X[0] + 12].copy()
-                a[y, SCR_X[0]:SCR_X[1]] = a[y, SCR_X[0]:SCR_X[1]] * (1 - al) + bg * al
-        x0, y0, x1, y1 = DEV[flow]
-        self.dev = a[y0:y1, x0:x1]
-        h, w = self.dev.shape[:2]
-        bottom = (cap - 40 if cap else sy[1]) - y0
-        self.v0 = np.array([0, 0, w, h], np.float32)  # whole device
-        self.v1 = np.array([SCR_X[0] - x0 - 10, sy[0] - y0 - 10, SCR_X[1] - x0 + 10, bottom + 10], np.float32)  # content
-        im = Image.new("RGB", (W, H), BG)
-        d = ImageDraw.Draw(im)
-        if tag:
-            d.text((90, DEV_H + 22), tag.upper(), font=font(26, True), fill=ACCENT)
-        if k:
-            band(d, k, DEV_H + (52 if tag else 26))
-        if foot:
-            d.text((W - 40 - d.textlength(foot, font=font(22)), H - 34), foot, font=font(22), fill=MUTED)
-        self.base = np.asarray(im).astype(np.float32)
-
-    def render(self, p):
-        e = p * p * (3 - 2 * p)  # ease in-out
+    def render(self, q, subs=None):
+        p = self.p[0] + (self.p[1] - self.p[0]) * min(1.0, q / self.hold)
+        e = p * p * (3 - 2 * p)
         vx0, vy0, vx1, vy1 = self.v0 + (self.v1 - self.v0) * e
         vw, vh = vx1 - vx0, vy1 - vy0
-        sc = min(self.MAX_W / vw, (DEV_H - 8) / vh)
+        sc = min(self.area_w / vw, (DEV_H - 16) / vh)
         ow, oh = int(vw * sc), int(vh * sc)
-        view = cv2.resize(self.dev[int(vy0):int(vy1), int(vx0):int(vx1)], (ow, oh), interpolation=cv2.INTER_AREA)
-        fr = self.base.copy()
+        view = cv2.resize(self.img[int(vy0):int(vy1), int(vx0):int(vx1)], (ow, oh), interpolation=cv2.INTER_AREA)
+        fr = (subs if subs is not None else self.base).copy()
         x, y = (W - ow) // 2, 8 + (DEV_H - 8 - oh) // 2
         fr[y:y + oh, x:x + ow] = view
+        if self.tap is not None and q > 0.35:
+            tx, ty = (self.tap[0] - vx0) * sc + x, (self.tap[1] - vy0) * sc + y
+            k = min(1.0, (q - 0.35) / 0.4)
+            ov = fr.copy()
+            r_dot = int(30 - 8 * min(1.0, k * 2))
+            cv2.circle(ov, (int(tx), int(ty)), r_dot, (255, 255, 255), -1, cv2.LINE_AA)
+            fr = fr * 0.55 + ov * 0.45
+            if k > 0.3:
+                rr = int(30 + 90 * (k - 0.3) / 0.7)
+                ring = fr.copy()
+                cv2.circle(ring, (int(tx), int(ty)), rr, (255, 255, 255), 5, cv2.LINE_AA)
+                a = 0.8 * (1 - (k - 0.3) / 0.7)
+                fr = fr * (1 - a) + ring * a
         return fr
 
-    def still(self, p=0.5):
-        return Image.fromarray(self.render(p).astype(np.uint8))
+    def still(self, q=0.6):
+        return Image.fromarray(self.render(q).astype(np.uint8))
+
+
+def px(b):  # CSS box -> screenshot box (screenshots are deviceScaleFactor 2)
+    return [b["x"] * 2, b["y"] * 2, (b["x"] + b["width"]) * 2, (b["y"] + b["height"]) * 2]
+
+
+def device_shot(frame, keys=(), tag=None, foot=None, p=(0.0, 1.0), zoom_to="screen"):
+    """Echo Show from the whole device (p=0) to its screen (p=1)."""
+    m = META[frame]
+    dev = px(m["device"])
+    dev = [dev[0] - 20, dev[1] - 20, dev[2] + 20, dev[3] + 20]
+    scr = px(m["screen"])
+    tap = None
+    if "tap" in m:
+        t = px(m["tap"])
+        tap = ((t[0] + t[2]) / 2, (t[1] + t[3]) / 2)
+    return Shot(frame, dev, scr, p=p, keys=keys, tag=tag, foot=foot, tap=tap)
+
+
+class Card:
+    def __init__(self, im, keys=()):
+        self.im = np.asarray(im).astype(np.float32)
+        self.keys = list(keys)
+
+    def render(self, q, subs=None):
+        return self.im
+
+    def still(self, q=0.6):
+        return Image.fromarray(self.im.astype(np.uint8))
+
+
+def card(title, sub="", lines=None, link_lines=None, small=None, k=None, title_size=80):
+    im = Image.new("RGB", (W, H), BG)
+    d = ImageDraw.Draw(im)
+    d.ellipse([140, 120, 176, 156], fill=ACCENT)
+    d.text((196, 116), "Shop Counter", font=font(36, True), fill=MUTED)
+    y = 220
+    for line in wrap(d, title, font(title_size, True), 1640):
+        d.text((140, y), line, font=font(title_size, True), fill=INK)
+        y += int(title_size * 1.22)
+    y += 14
+    for line in wrap(d, sub, font(44), 1640) if sub else []:
+        d.text((140, y), line, font=font(44), fill=MUTED)
+        y += 60
+    for a, b in lines or []:
+        d.text((140, y + 8), a, font=font(34, True), fill=ACCENT)
+        d.text((560, y + 8), b, font=font(34), fill=INK)
+        y += 56
+    for a, b in link_lines or []:
+        y += 18
+        d.text((140, y), a, font=font(34, True), fill=ACCENT)
+        d.text((140, y + 46), b, font=ImageFont.truetype(MONO, 34), fill=INK)
+        y += 104
+    if small:
+        d.text((140, y + 24), small, font=font(24), fill=MUTED)
+    if k:
+        bh = 40 + 53 * len(wrap(d, text_of(k), font(42), W - 180)[:3])
+        d.line([90, H - bh - 20, W - 90, H - bh - 20], fill=(40, 52, 80), width=2)
+        band(d, k, H - bh)
+    return Card(im, [k] if k else [])
 
 
 AUD = {k: read_wav(HERE / f"{AUDIO_DIR}/{k}.wav", TEMPO.get(v["voice"], 1.0)) for k, v in cfg["lines"].items()}
-segs = []  # (name, PIL image, [line keys], gap/pad seconds, min seconds)
+segs = []
 
 
-def add(name, img, keys=(), pad=0.6, min_s=2.0, gap=0.35):
-    segs.append((name, img, list(keys), pad, min_s, gap))
+def add(name, pic, keys=(), pad=0.4, min_s=2.0, gap=0.3, cut=False):
+    """cut=True: hard cut into this segment (same device, next turn), else a short crossfade."""
+    segs.append(dict(name=name, pic=pic, keys=list(keys), pad=pad, min_s=min_s, gap=gap, cut=cut))
 
 
-# 0-20 s: hook
-add("hook_ask", shot("maya_03_a_ask", "h_maya"), ["h_maya"], pad=0.3)
-add("hook_say", shot("maya_03_b_say", "h_alexa"), ["h_alexa"], pad=0.3)
-add("hook_title", card("It remembered. It didn't guess. It quoted the store.", "", "", title_color=INK, k="h_n"), ["h_n"], pad=0.3)
-# 20-40 s: problem, then what it is
-add("problem", card("Will it work with my stuff?", "Chargers, cables, spare parts: bought for devices you already own. Store bots guess the fit.", k="p_n1"), ["p_n1"], pad=0.2)
-add("what", card("Shop Counter", "An Alexa+ add-on that remembers your devices and answers fit questions only with the store's own words.",
-                 "the store clerk who remembers your stuff", k="p_n2"), ["p_n2"], pad=0.3)
-# 40-115 s: Maya, live
-add("m_home", shot("maya_00_home", "m_n0", tag="Live run · AWS Lambda · Claude Haiku as Alexa", foot=DISCLAIMER), ["m_n0"], pad=0.3)
-for n, (s, a) in {"01": ("m_s1", "m_a1"), "02": ("m_s2", "m_a2"), "03": ("m_s3", None), "04": ("m_s4", "m_a4"), "05": ("m_s5", "m_a5")}.items():
-    add(f"m{n}_ask", shot(f"maya_{n}_a_ask", s), [s], pad=0.1, min_s=1.4)
-    if a:
-        add(f"m{n}_say", shot(f"maya_{n}_b_say", a), [a], pad=0.1)
-    else:  # turn 3 is the opening shot; here only a short callback, no repeated audio
-        add(f"m{n}_say", shot(f"maya_{n}_c_clean", None, tag="The answer from the opening"), [], min_s=2.0)
-add("m05_clean", shot("maya_05_c_clean", "m_n1"), ["m_n1"], pad=0.2)
-add("m07_ask", shot("maya_07_a_ask", "m_s7", tag="New session"), ["m_s7"], pad=0.15, min_s=1.6)
-add("m07_say", shot("maya_07_b_say", "m_a7", tag="New session"), ["m_a7"], pad=0.2)
-# 115-140 s: Sam, another store, same closet, and a refusal with the store's words
-add("s_satechi", shot("sam_01_c_clean", "s_n0", tag="Earlier, at Satechi"), ["s_n0"], pad=0.1)
-add("s_switch", shot("sam_02_store_switched", None, tag="Now at Roborock: same shopper, same closet"), [], min_s=1.8)
-add("s03_ask", shot("sam_03_a_ask", "s_s3"), ["s_s3"], pad=0.15, min_s=1.6)
-add("s03_say", shot("sam_03_b_say", "s_a3"), ["s_a3"], pad=0.15)
-add("s04_ask", shot("sam_04_a_ask", "s_s4"), ["s_s4"], pad=0.15, min_s=1.6)
-add("s04_say", shot("sam_04_b_say", "s_a4"), ["s_a4"], pad=0.15)
-add("s04_clean", shot("sam_04_c_clean", None, tag="The store's own words: \"Not compatible with Saros 10R\""), [], min_s=1.8)
-# 140-160 s: how it's built (the MCP log once)
-add("tech_log", shot("maya_08_log", None, crop=None, tag="MCP activity: initialize · tools/list · tools/call · ui://"), [], min_s=3.0)
+ASK, SAY = (0.0, 0.25), (0.25, 1.0)  # ask frames stay wide on the device, answers push in to the screen
+
+# 0:00 hook: Sam's honest "no" at Roborock (recorded live, used again later as the callback)
+add("hook_ask", device_shot("sam_02_a_ask", ["h_sam"], p=ASK), ["h_sam"], pad=0.25)
+add("hook_say", device_shot("sam_02_c_clean", ["h_alexa"], p=SAY), ["h_alexa"], pad=0.35, cut=True)
+# the formula, one card
+add("formula", card("Alexa understands what you mean. The store answers for the facts.", "Shop Counter, an Alexa+ add-on for shopping by voice",
+                    k="c_n", title_size=76), ["c_n"], pad=0.3)
+# why a simulator, over the live device
+add("m_home", device_shot("maya_00_home", ["m_n0"], tag="Live on AWS Lambda · Claude Haiku 5.5 plays Alexa", foot=DISCLAIMER, p=(0.0, 0.4)), ["m_n0"], pad=0.3)
+for n, (s, a) in {"01": ("m_s1", "m_a1"), "02": ("m_s2", "m_a2"), "03": ("m_s3", "m_a3"), "04": ("m_s4", "m_a4")}.items():
+    add(f"m{n}_ask", device_shot(f"maya_{n}_a_ask", [s], p=ASK), [s], pad=0.1, min_s=1.4, cut=n != "01")
+    add(f"m{n}_say", device_shot(f"maya_{n}_c_clean", [a], p=SAY), [a], pad=0.15, cut=True)
+add("m05_tap", device_shot("maya_05_a_tap", ["m_n_tap"], tag="Voice first, not voice only", p=(0.6, 0.75)), ["m_n_tap"], pad=0.2, cut=True)
+add("m05_say", device_shot("maya_05_c_clean", ["m_a5"], tag="Voice first, not voice only", p=(0.75, 1.0)), ["m_a5"], pad=0.15, cut=True)
+add("m07_ask", device_shot("maya_07_a_ask", ["m_n1", "m_s7"], tag="New session", p=ASK), ["m_n1", "m_s7"], pad=0.1, min_s=1.4)
+add("m07_say", device_shot("maya_07_c_clean", ["m_a7"], tag="New session", p=SAY), ["m_a7"], pad=0.2, cut=True)
+# account linking: the consent page of the real OAuth flow, a tap on Allow
+lk = META["link_01_consent"]
+lc = px(lk["card"])
+lt = px(lk["tap"])
+add("link", Shot("link_01_consent", [lc[0] - 700, lc[1] - 120, lc[2] + 700, lc[3] + 120], [lc[0] - 260, lc[1] - 30, lc[2] + 260, lc[3] + 30],
+                 keys=["l_n"], tag="Account linking · OAuth 2.1 + PKCE, live", tap=((lt[0] + lt[2]) / 2, (lt[1] + lt[3]) / 2)), ["l_n"], pad=0.3, min_s=4.0)
+# Sam: Satechi first, then Roborock, same closet
+add("s01_ask", device_shot("sam_01_a_ask", ["s_n0", "s_s1"], tag="Earlier, at Satechi", p=ASK), ["s_n0", "s_s1"], pad=0.1)
+add("s01_say", device_shot("sam_01_c_clean", ["s_a1"], tag="Earlier, at Satechi", p=SAY), ["s_a1"], pad=0.15, cut=True)
+add("s02_ask", device_shot("sam_02_a_ask", ["s_n1", "s_s2"], tag="Now at Roborock · a different store, the same closet", p=ASK), ["s_n1", "s_s2"], pad=0.1)
+add("s02_back", device_shot("sam_02_c_clean", ["s_n2"], tag="Now at Roborock · a different store, the same closet", p=SAY), ["s_n2"], pad=0.2, cut=True)
+# under the hood: push in on this run's JSON-RPC (tools/call check_compatibility and its result)
+lg = META["sam_03_log"]["log"]
+c, r = px(lg["call"]), px(lg["result"] or lg["call"])
+pn = px(lg["panel"])  # start on the whole activity panel (the page's try-phrases stay out of the shot)
+add("tech_log", Shot("sam_03_log", [pn[0] - 40, pn[1], pn[2], pn[3]], [c[0] - 24, c[1] - 20, c[2] + 24, min(r[3], c[1] + 700)], p=(0.0, 1.0), hold=0.5,
+                     keys=["t_n1"], tag="MCP activity · this run's JSON-RPC: tools/call check_compatibility"), ["t_n1"], pad=0.2)
 add("tech", card("How it's built", "", lines=[
-    ("MCP", "self-hosted server, spec 2025-11-25, Streamable HTTP"),
+    ("MCP", "self-hosted server, spec 2025-11-25, Streamable HTTP, 9 tools"),
     ("MCP Apps", "Echo Show screens from ui://shop-counter/view.html"),
     ("Agent Skill", "SKILL.md: which tool when, what never to invent"),
-    ("AWS", "Lambda Function URL + DynamoDB closet"),
-    ("Open source", "Shelf to Alexa: any Shopify store, one config entry"),
-    ("Honesty", "eval 57/57, 0 made-up facts · live Claude Haiku 17/18"),
-], k="t_n"), ["t_n"], pad=0.2)
-# 160-170 s: close
-add("final", card("Shop Counter", "the store clerk who remembers your stuff", "Alexa+ add-on · MCP server · MCP Apps · Agent Skill",
-                  small=DISCLAIMER, k="f_n"), ["f_n"], pad=1.2, min_s=4.0)
-
-# tech_log shares the narration with the "tech" card: split t_n across both
-TECH_SPLIT = 0.45
+    ("AWS", "Lambda Function URL, DynamoDB closet, brain called from the Lambda"),
+    ("Account linking", "OAuth 2.1, PKCE S256, consent page, rotating refresh tokens"),
+    ("Eval", "81 of 81 shopper cases, 0 made-up facts"),
+    ("Live model", "Claude Haiku 5.5 as Alexa: 19 of 21 conversations pass every check"),
+], k="t_n2", title_size=72), ["t_n2"], pad=0.3)
+add("final", card("Shop Counter", "the store clerk who remembers your stuff", link_lines=[("Try it:", SIM_URL), ("Open source (MIT)", REPO)],
+                  small=DISCLAIMER, k="f_n"), ["f_n"], pad=1.6, min_s=6.0)
 
 # timing
-plan, t = [], 0.0
-for name, img, keys, pad, min_s, gap in segs:
-    a = [AUD[k] for k in keys]
-    secs = sum(len(x) for x in a) / SR + gap * max(0, len(a) - 1) + 0.2 + pad
-    plan.append([name, img, keys, max(secs, min_s), gap])
-# move part of t_n's time onto the log shot
-i = [p[0] for p in plan].index("tech")
-move = len(AUD["t_n"]) / SR * TECH_SPLIT
-plan[i - 1][3] = max(plan[i - 1][3], move)
-plan[i][3] = max(2.5, plan[i][3] - move)
-
-total = sum(p[3] for p in plan)
+plan = []
+for s in segs:
+    a = [AUD[k] for k in s["keys"]]
+    secs = sum(len(x) for x in a) / SR + s["gap"] * max(0, len(a) - 1) + 0.2 + s["pad"]
+    plan.append({**s, "secs": max(secs, s["min_s"])})
+total = sum(p["secs"] for p in plan)
 print("total", round(total, 1), "s")
-assert total < 170, f"too long: {total:.1f}s"
+assert total < 178, f"too long: {total:.1f}s"
 
+# per-line subtitle switch: a segment with two lines shows the first line's subtitle until the second starts
 (HERE / "frames").mkdir(exist_ok=True)
-audio = np.zeros(int((total + 1) * SR), np.float32)
+voice = np.zeros(int((total + 2) * SR), np.float32)
 timeline, t = [], 0.0
 proc = subprocess.Popen([FFMPEG, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS),
-                         "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium", "/tmp/sc_video.mp4"],
+                         "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium", str(TMP / "video.mp4")],
                         stdin=subprocess.PIPE)
 prev = None
-for idx, (name, img, keys, secs, gap) in enumerate(plan):
-    n = int(round(secs * FPS))
-    moving = isinstance(img, DShot)
-    if name in CHECKS:
-        (img.still(0.6) if moving else img.convert("RGB")).save(HERE / f"frames/v2_check_{CHECKS[name]}_{name}.jpg", quality=88)
-    nx = int(XFADE * FPS) if prev is not None else 0
-    for f in range(n):
-        cur = img.render(f / max(1, n - 1)) if moving else (cur if f else np.asarray(img).astype(np.float32))
-        if f < nx:
-            a = (f + 1) / (nx + 1)
-            fr = prev * (1 - a) + cur * a
-        else:
-            fr = cur
-        proc.stdin.write(fr.astype(np.uint8).tobytes())
-    # audio: lines one after another, the first one shortly after the cut
-    at = t + 0.2
-    if name == "tech":  # narration started on the log shot
-        at = None
+checks = 0
+for s in plan:
+    pic, keys = s["pic"], s["keys"]
+    n = int(round(s["secs"] * FPS))
+    starts, at = [], t + 0.2
     for k in keys:
-        if at is None:
-            continue
+        starts.append(at)
         a = AUD[k]
         s0 = int(at * SR)
-        audio[s0:s0 + len(a)] += a[: len(audio) - s0]
-        at += len(a) / SR + gap
-    if name == "tech_log":  # t_n plays across the log shot and the card
-        a = AUD["t_n"]
-        s0 = int((t + 0.2) * SR)
-        audio[s0:s0 + len(a)] += a
-    timeline.append({"segment": name, "start": round(t, 2), "seconds": round(secs, 2),
-                     "lines": [{"key": k, "voice": cfg["lines"][k]["voice"], "text": text_of(k)} for k in (keys if name != "tech" else [])]
-                     + ([{"key": "t_n", "voice": "narrator", "text": text_of("t_n")}] if name == "tech_log" else [])})
+        voice[s0:s0 + len(a)] += a
+        at += len(a) / SR + s["gap"]
+    subs = None
+    if isinstance(pic, Shot) and len(keys) > 1:
+        subs = [base_canvas([k], pic.tag, pic.foot) for k in keys]
+    nx = 0 if (prev is None or s["cut"]) else int(XFADE * FPS)
+    for f in range(n):
+        q = f / max(1, n - 1)
+        now = t + f / FPS
+        sb = None
+        if subs:
+            i = max([j for j, st in enumerate(starts) if st - 0.05 <= now] or [0])
+            sb = subs[i]
+        cur = pic.render(q, sb)
+        fr = prev * (1 - (f + 1) / (nx + 1)) + cur * ((f + 1) / (nx + 1)) if f < nx else cur
+        proc.stdin.write(fr.astype(np.uint8).tobytes())
     prev = cur
+    checks += 1
+    pic.still(0.7).save(HERE / f"frames/v4_check_{checks:02d}_{s['name']}.jpg", quality=86)
+    timeline.append({"segment": s["name"], "start": round(t, 2), "seconds": round(n / FPS, 2),
+                     "lines": [{"key": k, "voice": cfg["lines"][k]["voice"], "text": text_of(k), "at": round(st, 2)} for k, st in zip(keys, starts)]})
     t += n / FPS
 proc.stdin.close()
 proc.wait()
-audio = audio[: int(t * SR)]
-audio = (np.clip(audio / max(1e-6, np.abs(audio).max()) * 0.9, -1, 1) * 32767).astype(np.int16)
-with wave.open("/tmp/sc_audio.wav", "wb") as w:
-    w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes(audio.tobytes())
+voice = voice[: int(t * SR)]
+voice = voice / max(1e-6, np.abs(voice).max()) * 0.9
+
+
+def pad_music(n):
+    """A quiet pad made here with numpy: four soft chords (C maj7, A min7, F maj7, G6), 8 s each, sine partials,
+    slow attack and release, a gentle tremolo. No samples, no third-party audio."""
+    tt = np.arange(n) / SR
+    chords = [[48, 55, 64, 71], [45, 52, 60, 67], [41, 48, 57, 64], [43, 50, 59, 64]]
+    out = np.zeros(n, np.float32)
+    seg = 8.0
+    for i in range(int(n / SR / seg) + 2):
+        t0 = i * seg - 1.5
+        a0, a1 = max(0, int(t0 * SR)), min(n, int((t0 + seg + 3.0) * SR))
+        if a0 >= a1:
+            continue
+        lt = tt[a0:a1] - t0
+        env = np.clip(lt / 2.5, 0, 1) * np.clip((seg + 3.0 - lt) / 2.5, 0, 1)
+        sig = np.zeros(a1 - a0, np.float32)
+        for m in chords[i % 4]:
+            f0 = 440 * 2 ** ((m - 69) / 12)
+            for det in (-0.6, 0.6):
+                sig += np.sin(2 * np.pi * (f0 + det) * lt) * 0.5 + np.sin(2 * np.pi * 2 * (f0 + det) * lt) * 0.08
+        out[a0:a1] += sig * env
+    out *= 1 + 0.08 * np.sin(2 * np.pi * 0.17 * tt)
+    out /= max(1e-6, np.abs(out).max())
+    fade = np.clip(tt / 1.5, 0, 1) * np.clip((tt[-1] - tt) / 2.5, 0, 1)
+    return (out * fade).astype(np.float32)
+
+
+music = pad_music(len(voice))
+# duck the pad a little under speech (envelope of the voice, 150 ms smoothing)
+env = np.abs(voice)
+k = int(0.15 * SR)
+env = np.convolve(env, np.ones(k) / k, mode="same")
+duck = 1.0 - 0.45 * np.clip(env / 0.05, 0, 1)
+mix = voice + music * 0.075 * duck
+pre = TMP / "mix.wav"
+with wave.open(str(pre), "wb") as w:
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes((np.clip(mix, -1, 1) * 32767).astype(np.int16).tobytes())
+
+# loudness: a gentle compressor, gain, then a limiter on 4x oversampled audio. Two passes: the first measures the
+# integrated loudness with the gain at 9 dB, the second sets the gain for -16 LUFS. Without the compressor the AAC
+# encode overshot the limiter by 2-4 dB on TTS transients (loudnorm alone left +1.5 dBTP in the first v4 build).
+def chain(gain):
+    return (f"acompressor=threshold=0.1:ratio=3:attack=5:release=120,volume={gain:.2f}dB,aresample=192000,"
+            "alimiter=limit=0.6:attack=1:release=80:level=disabled,aresample=48000")
+
+
+probe = subprocess.run([FFMPEG, "-hide_banner", "-nostats", "-i", str(pre), "-af", chain(9.0) + ",ebur128", "-f", "null", "-"],
+                       capture_output=True, text=True).stderr
+i_meas = float(re.findall(r"I:\s+(-?[\d.]+) LUFS", probe)[-1])
+af = chain(9.0 + (-16.0 - i_meas))
 out = HERE / OUT_NAME
-subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-i", "/tmp/sc_video.mp4", "-i", "/tmp/sc_audio.wav", "-c:v", "copy",
-                "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", str(out)], check=True)
-json.dump(timeline, open(HERE / "capture/timeline_v2.json", "w"), indent=2, ensure_ascii=False)
+subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-i", str(TMP / "video.mp4"), "-i", str(pre), "-af", af, "-c:v", "copy",
+                "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)], check=True)
+json.dump(timeline, open(HERE / "capture/timeline_v4.json", "w"), indent=2, ensure_ascii=False)
 print(out, round(t, 1), "s")

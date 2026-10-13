@@ -30,7 +30,28 @@ const ICONS: Record<string, string> = {
   person: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0',
   quote: 'M7 7h4v4c0 3-1.5 5-4 6M15 7h4v4c0 3-1.5 5-4 6',
   spark: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z',
+  laptop: 'M5 5h14a1 1 0 011 1v10H4V6a1 1 0 011-1zM2 19h20',
+  tablet: 'M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zM11 18h2',
+  desktop: 'M3 4h18v12H3zM9 20h6M12 16v4',
+  watch: 'M9 2h6l1 4H8zM8 18h8l-1 4H9zM7 6h10v12H7z',
+  earbuds: 'M8 4a3 3 0 00-3 3v4a2 2 0 004 0V7M16 4a3 3 0 013 3v4a2 2 0 01-4 0V7M7 13v6M17 13v6',
+  robot: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 8a4 4 0 100 8 4 4 0 000-8zM12 3v3',
+  plug: 'M9 3v5M15 3v5M7 8h10v3a5 5 0 01-10 0zM12 16v5',
 };
+
+/** Icon for a remembered device. The server sends the kind (v1.6); older answers fall back to the name. */
+const KIND_ICON: Record<string, string> = { phone: 'device', laptop: 'laptop', tablet: 'tablet', desktop: 'desktop', watch: 'watch', earbuds: 'earbuds', robot: 'robot', other: 'plug' };
+export function deviceIcon(name: string, kind?: string): string {
+  if (kind && KIND_ICON[kind]) return KIND_ICON[kind];
+  if (/iPhone|Galaxy (S|Z|Note|A)\d|Pixel \d|phone/i.test(name)) return 'device';
+  if (/MacBook|laptop|Pixelbook|Surface Laptop/i.test(name)) return 'laptop';
+  if (/iPad|tablet|Galaxy Tab|Kindle/i.test(name)) return 'tablet';
+  if (/iMac|Mac mini|Mac Studio|Mac Pro/i.test(name)) return 'desktop';
+  if (/Watch/i.test(name)) return 'watch';
+  if (/AirPods|Buds|earbuds|headphones/i.test(name)) return 'earbuds';
+  if (/robot|vacuum|Roborock|Saros|Qrevo|Roomba|\b[QS]\d{1,2}\b/i.test(name)) return 'robot';
+  return 'plug';
+}
 
 export function icon(name: keyof typeof ICONS | string, cls = 'ic'): SVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -232,7 +253,14 @@ function renderCompat(sc: Extract<Structured, { kind: 'compat' }>, host: ViewHos
   const dev = sc.device || 'your device';
   const mine = sc.device_source === 'closet';
   const v = {
-    confirmed: { cls: 'ok', ic: 'check', title: `Works with ${mine ? 'your ' : ''}${dev}`, sub: 'Confirmed by the store' },
+    confirmed: { cls: 'ok', ic: 'check', title: `Listed for ${mine ? 'your ' : ''}${dev}`, sub: 'The store lists it' },
+    // v1.6: the store names the series or family only ("iPhone 17" for an iPhone 17 Pro).
+    family_only: {
+      cls: 'warn',
+      ic: 'alert',
+      title: `Not listed for ${mine ? 'your ' : ''}${dev} specifically`,
+      sub: `The store lists ${sc.evidence?.quote ?? 'the series'}, not this exact model, so I will not guess`,
+    },
     not_listed: { cls: 'warn', ic: 'alert', title: `Not confirmed for ${dev}`, sub: 'The store does not list it, so I will not guess' },
     incompatible: { cls: 'bad', ic: 'x', title: `Not for ${dev}`, sub: 'The store data rules it out' },
   }[sc.status] ?? { cls: 'warn', ic: 'alert', title: 'Unknown', sub: '' };
@@ -249,7 +277,7 @@ function renderCompat(sc: Extract<Structured, { kind: 'compat' }>, host: ViewHos
       'div',
       { class: 'verdict-badge' },
       h('div', { class: 'seal' }, icon(v.ic, 'ic big')),
-      h('div', {}, mine ? h('p', { class: 'eyebrow remembered' }, icon('device'), `Your ${dev} · remembered`) : null, h('h1', {}, v.title), h('p', { class: 'muted' }, v.sub)),
+      h('div', {}, mine ? h('p', { class: 'eyebrow remembered', 'data-icon': deviceIcon(dev) }, icon(deviceIcon(dev)), `Your ${dev} · remembered`) : null, h('h1', {}, v.title), h('p', { class: 'muted' }, v.sub)),
     ),
     h(
       'div',
@@ -266,7 +294,7 @@ function renderCompat(sc: Extract<Structured, { kind: 'compat' }>, host: ViewHos
           )
         : h('p', { class: 'evidence none' }, 'No line in the store data mentions this device.'),
       sc.also?.length
-        ? h('ul', { class: 'also' }, ...sc.also.slice(0, 4).map((a) => h('li', { class: `st-${a.status}` }, icon(a.status === 'confirmed' ? 'check' : a.status === 'incompatible' ? 'x' : 'alert'), h('span', {}, a.device), h('em', {}, a.status === 'confirmed' ? 'confirmed' : a.status === 'incompatible' ? 'will not work' : 'not listed'))))
+        ? h('ul', { class: 'also' }, ...sc.also.slice(0, 4).map((a) => h('li', { class: `st-${a.status}` }, icon(a.status === 'confirmed' ? 'check' : a.status === 'incompatible' ? 'x' : 'alert'), h('span', {}, a.device), h('em', {}, a.status === 'confirmed' ? 'listed' : a.status === 'family_only' ? `only ${a.evidence?.quote ?? 'the series'} listed` : a.status === 'incompatible' ? 'will not work' : 'not listed'))))
         : null,
       sc.status === 'confirmed' ? h('div', { class: 'actions solo' }, add) : null,
     ),
@@ -274,7 +302,7 @@ function renderCompat(sc: Extract<Structured, { kind: 'compat' }>, host: ViewHos
       ? h(
           'div',
           { class: 'alts' },
-          h('h2', {}, sc.status === 'confirmed' ? 'Also works' : `These are confirmed for ${dev}`),
+          h('h2', {}, sc.status === 'confirmed' ? 'Also listed' : `The store lists these for ${dev}`),
           h(
             'div',
             { class: 'alt-list' },
@@ -408,7 +436,11 @@ function renderCloset(sc: Extract<Structured, { kind: 'closet' }>, host: ViewHos
     { class: 'kind-closet' },
     header(sc.store ? `Remembered for you · shared with every store, now ${sc.store}` : 'Remembered for you · shared with every store', 'My devices'),
     sc.devices.length
-      ? h('ul', { class: 'devices' }, ...sc.devices.map((d) => h('li', {}, h('span', { class: 'dev-ic' }, icon('device')), h('span', {}, d))))
+      ? h('ul', { class: 'devices' }, ...sc.devices.map((d, i) => {
+          const kind = sc.items?.[i]?.name === d ? sc.items[i].kind : undefined;
+          const ic = deviceIcon(d, kind);
+          return h('li', { 'data-icon': ic }, h('span', { class: 'dev-ic' }, icon(ic)), h('span', {}, d));
+        }))
       : h('p', { class: 'empty' }, 'Tell me what devices you have, and I will check compatibility for you.'),
     pets.length || sc.home?.notes
       ? h('div', { class: 'home' }, icon('home'), h('p', {}, [pets.length ? `Pets: ${pets.join(', ')}` : '', sc.home?.notes ?? ''].filter(Boolean).join(' · ')))
@@ -427,12 +459,17 @@ function renderHandoff(sc: Extract<Structured, { kind: 'handoff' }>): HTMLElemen
   );
 }
 
-function renderError(sc: { message?: string; code?: string }, fallbackText?: string): HTMLElement {
+function renderError(sc: { message?: string; code?: string; options?: string[] }, fallbackText?: string): HTMLElement {
+  // v1.6 device_ambiguous: a question, not a failure. Show the remembered devices to pick from.
+  const ask = sc.code === 'device_ambiguous';
   return h(
     'section',
     { class: 'kind-error' },
-    h('div', { class: 'verdict-badge warn' }, h('div', { class: 'seal' }, icon('alert', 'ic big')), h('div', {}, h('h1', {}, 'That did not work'), sc.code ? h('p', { class: 'muted mono' }, sc.code) : null)),
+    h('div', { class: 'verdict-badge warn' }, h('div', { class: 'seal' }, icon(ask ? 'device' : 'alert', 'ic big')), h('div', {}, h('h1', {}, ask ? 'Which one?' : 'That did not work'), sc.code && !ask ? h('p', { class: 'muted mono' }, sc.code) : null)),
     h('p', { class: 'lead' }, sc.message || fallbackText || 'Please try again.'),
+    ask && sc.options?.length
+      ? h('ul', { class: 'devices' }, ...sc.options.map((d) => { const ic = deviceIcon(d); return h('li', { 'data-icon': ic }, h('span', { class: 'dev-ic' }, icon(ic)), h('span', {}, d)); }))
+      : null,
   );
 }
 

@@ -95,3 +95,83 @@ describe('card images', () => {
     expect(sizedImage(null)).toBeNull();
   });
 });
+
+/*
+ * Honesty round 2 (2026-10-13): Roborock has no compatibility tags, so robots outside the device
+ * dictionary are matched against store text. Found on the live server: "for Qrevo only" read as a no,
+ * "for Qrevo Curv" read as a yes for a plain Qrevo, "Upgraded from S8 MaxV Ultra" read as a yes.
+ * Titles below are copied from the Roborock feed (cache 2026-10-12).
+ */
+const ROBO = { ...STORE, id: 'roborock', name: 'Roborock' };
+const p = (title: string, product_type = 'Accessories', body_html = '') => product({ title, product_type, body_html, vendor: 'Roborock', variants: [variant({ price: '19.99' })] });
+const items = [
+  p('Roborock Washable Filter*2 pcs for Roborock Qrevo only (Incompatible with other models in the Qrevo series)'),
+  p('Roborock Mop Cloth*4pcs for Qrevo Curv Series and Qrevo Edge Series (Not compatible with CurvX)'),
+  p('Roborock Saros 10 Robot Vacuum with Dual Anti-tangle System (Upgraded from S8 MaxV Ultra)', 'Robot Vacuums'),
+  p('Roborock Side Brushes Replacement for Qrevo Curv 2 Flow'),
+  p('Roborock Washable Filter (x2) for Roborock S7/S8/S8+/S8 Pro Ultra/S7 Max Ultra'),
+  p('Roborock Dust Bag*6pcs for S8 MaxV Ultra, S8 Max Ultra, Qrevo Series, Qrevo Curv Series, Qrevo Edge Series, Saros Series and QV Series'),
+  p('Main Brush for Q7 M5 (replaces the Q5 brush)', 'Accessories', '<p>Designed for the Q7 Max, quieter than the Q5 Max.</p>'),
+  p('Qrevo Curv 1 Year', 'Warranty'),
+  p('QRevo 1 Year', 'Warranty'),
+  p('Roborock Qrevo S', ''),
+  p('Q7 Max+ Robot 1 Year', 'Warranty'),
+  p('Roborock QV 35A Robot Vacuum with Multifunctional Dock (Upgraded from Qrevo S)', 'Robot Vacuums'),
+];
+const cat = await staticCatalog(ROBO, items).load();
+const at = (start: string) => cat.catalog.items.find((i) => i.title.startsWith(start) || i.title === start)!;
+const st = (start: string, device: string) => checkCompat(at(start), parseDevice(device)).status;
+
+describe('compatibility by name for models outside the dictionary: meaning, not substring', () => {
+  it('"for Qrevo only" is a yes for the Qrevo; "other models in the Qrevo series" is a no for those, not for the Qrevo', () => {
+    const v = checkCompat(at('Roborock Washable Filter*2 pcs for Roborock Qrevo only'), parseDevice('Qrevo'));
+    expect(v.status).toBe('confirmed');
+    expect(v.evidence?.quote).toContain('Qrevo only');
+    expect(st('Roborock Washable Filter*2 pcs for Roborock Qrevo only', 'Qrevo S')).toBe('incompatible');
+    expect(st('Roborock Washable Filter*2 pcs for Roborock Qrevo only', 'Qrevo Curv')).toBe('incompatible');
+  });
+
+  it('a longer model is not the shorter one: "Qrevo Curv" is not a Qrevo, "Qrevo Curv 2 Flow" is not a Qrevo Curv, "S8 Pro Ultra" is not an S8 Max Ultra', () => {
+    expect(st('Roborock Mop Cloth*4pcs for Qrevo Curv Series', 'Qrevo')).toBe('not_listed');
+    expect(st('Roborock Side Brushes Replacement for Qrevo Curv 2 Flow', 'Qrevo Curv')).toBe('not_listed');
+    expect(st('Roborock Side Brushes Replacement for Qrevo Curv 2 Flow', 'Qrevo Curv 2 Flow')).toBe('confirmed');
+    expect(st('Roborock Washable Filter (x2)', 'S8')).toBe('confirmed');
+    expect(st('Roborock Washable Filter (x2)', 'S8+')).toBe('confirmed');
+    expect(st('Roborock Washable Filter (x2)', 'S8 Pro Ultra')).toBe('confirmed');
+    expect(st('Roborock Washable Filter (x2)', 'S8 Max Ultra')).toBe('not_listed');
+    expect(st('Qrevo Curv 1 Year', 'Qrevo')).toBe('not_listed');
+    expect(st('QRevo 1 Year', 'Qrevo')).toBe('confirmed'); // "1 Year" is the plan term, not a model
+  });
+
+  it('"X Series" or "X+" is a family answer for another model in it, never a yes', () => {
+    const v = checkCompat(at('Roborock Dust Bag'), parseDevice('Saros 10'));
+    expect(v.status).toBe('family_only');
+    expect(v.evidence?.quote).toContain('Saros Series');
+    expect(st('Roborock Dust Bag', 'Qrevo S')).toBe('family_only');
+    expect(st('Roborock Dust Bag', 'Qrevo Curv 2 Flow')).toBe('family_only');
+    expect(st('Roborock Dust Bag', 'S8 MaxV Ultra')).toBe('confirmed');
+    // A series named after the exact model includes that model.
+    expect(st('Roborock Dust Bag', 'Qrevo')).toBe('confirmed');
+    expect(st('Roborock Mop Cloth*4pcs for Qrevo Curv Series', 'Qrevo Curv')).toBe('confirmed');
+    // "Q7 Max+" is the Q7 Max with a dock: the store names the edition, not the shopper's model.
+    const plus = checkCompat(at('Q7 Max+ Robot 1 Year'), parseDevice('Q7 Max'));
+    expect(plus.status).toBe('family_only');
+    expect(plus.evidence?.quote).toBe('Q7 Max+');
+  });
+
+  it('"upgraded from", "replaces", "than" name another model, not a fit', () => {
+    expect(st('Main Brush for Q7 M5', 'Q5')).toBe('not_listed');
+    expect(st('Main Brush for Q7 M5', 'Q5 Max')).toBe('not_listed');
+    expect(st('Main Brush for Q7 M5', 'Q7 M5')).toBe('confirmed');
+    expect(st('Main Brush for Q7 M5', 'Q7 Max')).toBe('confirmed');
+  });
+
+  it('a robot is not an accessory: its title never lists another robot, nor itself', () => {
+    const v = checkCompat(at('Roborock Saros 10 Robot Vacuum'), parseDevice('S8 MaxV Ultra'));
+    expect(v.status).toBe('not_listed');
+    expect(v.note).toMatch(/itself/);
+    expect(st('Roborock Saros 10 Robot Vacuum', 'Saros 10')).toBe('not_listed');
+    expect(st('Roborock QV 35A', 'Qrevo S')).toBe('not_listed');
+    expect(st('Roborock Qrevo S', 'Qrevo S')).toBe('not_listed');
+  });
+});

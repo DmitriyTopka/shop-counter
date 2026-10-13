@@ -1,14 +1,17 @@
 // Echo Show / Alexa+ simulator.
-// - Real MCP client over Streamable HTTP (via the Vite proxy at /mcp). The shopper signs in through the
-//   server's demo login and every request carries `Authorization: Bearer <signed session>`.
+// - Real MCP client over Streamable HTTP (via the Vite proxy at /mcp). The shopper signs in through
+//   "Link account" (real OAuth 2.1 + PKCE account linking, src/link.ts) or, as a fallback, the
+//   server's demo login; every request carries `Authorization: Bearer <token>`.
 // - The shopper and the store are picked separately: the device closet belongs to the shopper and is
 //   shared by every store (Maya's iPhone saved at Satechi is known at Roborock).
-// - "Alexa" = Claude Haiku through the local brain proxy (/brain), or the keyword router when the proxy says fallback.
+// - "Alexa" = Claude Haiku through /brain (the local brain proxy, or Amazon Bedrock on the hosted Lambda), or the
+//   keyword router when the brain says fallback.
 // - Tool results with _meta.ui are drawn by the MCP App view in a sandboxed iframe (AppBridge).
 // - Every JSON-RPC message (server and view) and every brain turn goes to the MCP activity panel.
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
 import { AppHost } from './apphost';
+import { startLink, takeLinkCallback } from './link';
 import { LoggingTransport } from './logging-transport';
 import { route, type ScreenProduct, type ScreenState } from './router';
 import { canListen, listen, setMuted, speak, stopSpeaking } from './voice';
@@ -19,6 +22,7 @@ const CFG = __SIM_CONFIG__;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 // ---------------- state ----------------
+const linkCallback = takeLinkCallback(); // first: an OAuth callback puts the original ?user=&store= back
 const params = new URLSearchParams(location.search);
 let profile = CFG.profiles.find((p) => p.id === params.get('user')) ?? CFG.profiles[0];
 // Stores come from the profiles' home stores (Satechi at /mcp, Roborock at /stores/roborock/mcp).
@@ -28,12 +32,12 @@ const STORES = CFG.profiles
   .filter((s, i, a) => a.findIndex((x) => x.path === s.path) === i);
 const storeFor = (name: string | null | undefined) => STORES.find((s) => s.name.toLowerCase() === (name ?? '').toLowerCase());
 let store = storeFor(params.get('store')) ?? storeFor(profile.store) ?? STORES[0];
-const session: { profile?: string; token?: string; user?: string } = {};
+const session: { profile?: string; token?: string; user?: string; via?: 'oauth' | 'demo' } = {};
 let client: Client | null = null;
 let tools: any[] = [];
 let history: any[] = []; // Anthropic messages (append-only within a session)
 const screen: ScreenState = { products: [] };
-let llm = { ok: false, reason: 'checking', spent: 0, limit: 0.5 };
+let llm: { ok: boolean; reason: string; spent: number; limit: number; label?: string } = { ok: false, reason: 'checking', spent: 0, limit: 0.5 };
 let busy = false;
 
 // ---------------- activity log ----------------
@@ -127,9 +131,9 @@ function renderProfileUi() {
 function setMode() {
   const el = $('mode');
   if (llm.ok) {
-    el.textContent = `Claude Haiku · $${llm.spent.toFixed(4)} / $${llm.limit.toFixed(2)} today`;
+    el.textContent = `${llm.label ?? 'Claude Haiku'} · $${llm.spent.toFixed(4)} / $${llm.limit.toFixed(2)} today`;
     el.className = 'badge llm';
-    el.title = 'Alexa is played by Claude Haiku through the local brain proxy';
+    el.title = `Alexa is played by ${llm.label ?? 'Claude Haiku through the local brain proxy'}`;
   } else {
     el.textContent = 'Offline router';
     el.className = 'badge router';
@@ -156,12 +160,21 @@ async function connect() {
   client = null;
   host.reset();
   const url = new URL(store?.path ?? profile.mcpPath ?? '/mcp', location.href);
-  if (session.profile !== profile.id || !session.token) {
+  if (!session.token || (session.via !== 'oauth' && session.profile !== profile.id)) {
     // Demo sign-in. On Alexa+ this is account linking; here the server signs a session for the profile.
-    const r = await fetch('/auth/demo-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ profile: profile.id }) });
-    if (!r.ok) throw new Error(`demo login failed (${r.status})`);
-    const s = await r.json();
-    Object.assign(session, { profile: profile.id, token: s.token, user: s.user_id });
+    // On the public hosted page (/sim/) Maya and Sam are private per browser: each visitor signs in as a
+    // fresh guest under that name and keeps the session for 24 h, so one judge never sees another's closet.
+    const hosted = location.pathname.startsWith('/sim');
+    const key = `shop-counter-session-${profile.id}`;
+    let s: any = null;
+    if (hosted) { try { s = JSON.parse(localStorage.getItem(key) ?? 'null'); } catch { s = null; } }
+    if (!s || !(Date.parse(s.expires_at) > Date.now() + 60_000)) {
+      const r = await fetch('/auth/demo-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ profile: hosted ? 'guest' : profile.id }) });
+      if (!r.ok) throw new Error(`demo login failed (${r.status})`);
+      s = await r.json();
+      if (hosted) { try { localStorage.setItem(key, JSON.stringify(s)); } catch { /* private window: session lives in memory only */ } }
+    }
+    Object.assign(session, { profile: profile.id, token: s.token, user: s.user_id, via: 'demo' });
     log('sys', '··', { note: `signed in as ${profile.name} (${s.user_id}), session until ${s.expires_at}` });
   }
   const transport = new StreamableHTTPClientTransport(url, { requestInit: { headers: { authorization: `Bearer ${session.token}` } } });
@@ -169,7 +182,7 @@ async function connect() {
     { name: 'echo-show-simulator', version: '0.1.0' },
     { capabilities: { extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] } } } as any },
   );
-  log('sys', '··', { note: `connect ${new URL(CFG.mcpUrl).origin}${url.pathname} as ${session.user} (signed session)` });
+  log('sys', '··', { note: `connect ${url.origin}${url.pathname} as ${session.user} (${session.via === 'oauth' ? 'linked account, OAuth token' : 'demo session'})` });
   await c.connect(new LoggingTransport(transport, mcpLog) as any);
   tools = (await c.listTools()).tools;
   client = c;
@@ -267,7 +280,7 @@ async function brainTurn(): Promise<any | null> {
     setMode();
     return null;
   }
-  llm = { ok: true, reason: '', spent: data.spent_today, limit: data.limit_usd };
+  llm = { ...llm, ok: true, reason: '', spent: data.spent_today, limit: data.limit_usd };
   setMode();
   log('llm', '<-', { note: `${data.stop_reason} in ${Math.round(performance.now() - t0)} ms, $${data.cost_usd}`, usage: data.usage, content: data.content });
   return data;
@@ -388,6 +401,7 @@ function initUi() {
   sel.value = profile.id;
   sel.addEventListener('change', async () => {
     profile = CFG.profiles.find((p) => p.id === sel.value)!;
+    session.token = undefined; // another shopper: drop the link, demo login for this profile
     store = storeFor(profile.store) ?? store;
     storeSel.value = store.path;
     await newSession();
@@ -416,6 +430,18 @@ function initUi() {
   document.querySelectorAll<HTMLButtonElement>('[data-device]').forEach((b) => b.addEventListener('click', () => setDevice(b.dataset.device!)));
   if (params.get('device')) setDevice(params.get('device')!);
   $('new-session').addEventListener('click', () => newSession());
+  // Account linking: the real OAuth flow (consent page on the server, back here with a code).
+  const linkBtn = document.createElement('button');
+  linkBtn.type = 'button';
+  linkBtn.className = 'chip-btn';
+  linkBtn.id = 'link-account';
+  linkBtn.title = 'Link your Shop Counter account the way Alexa+ does: OAuth 2.1 with PKCE';
+  linkBtn.textContent = 'Link account';
+  linkBtn.addEventListener('click', () => {
+    startLink((note, data) => log('sys', '··', { note: `link: ${note}`, ...(data ? { data } : {}) }))
+      .catch((e) => log('sys', '!!', { error: `link failed: ${e?.message ?? e}. Demo login still works.` }));
+  });
+  $('new-session').after(linkBtn);
   const toggleLog = () => {
     const on = document.body.classList.toggle('no-log');
     $('toggle-log').setAttribute('aria-pressed', String(!on));
@@ -491,11 +517,23 @@ async function newSession() {
 
 async function checkBrain() {
   const st = await fetch('/brain/health').then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  llm = st ? { ok: st.llm, reason: st.reason ?? '', spent: st.spent_today, limit: st.limit_usd } : { ok: false, reason: 'proxy offline', spent: 0, limit: 0.5 };
+  llm = st ? { ok: st.llm, reason: st.reason ?? '', spent: st.spent_today, limit: st.limit_usd, label: st.label } : { ok: false, reason: 'proxy offline', spent: 0, limit: 0.5 };
   log('llm', '··', { note: st ? `brain: ${st.llm ? `${st.model}, $${st.spent_today} of $${st.limit_usd} today` : `no LLM (${st.reason})`}` : 'brain proxy offline, keyword router active' });
   setMode();
 }
 
+if (linkCallback) {
+  try {
+    const l = await linkCallback;
+    Object.assign(session, { token: l.token, user: l.user, via: 'oauth', profile: undefined });
+    // Maya and Sam keep their try-phrases and home store; a guest keeps the profile picked before.
+    const p = CFG.profiles.find((x) => `demo-${x.id}` === l.user);
+    if (p) { profile = p; store = storeFor(params.get('store')) ?? storeFor(p.store) ?? store; }
+    log('sys', '··', { note: `account linked: ${l.user}, token for ${l.resource}, ${Math.round(l.expiresIn / 60)} min` });
+  } catch (e: any) {
+    log('sys', '!!', { error: `${e?.message ?? e}. Falling back to the demo login.` });
+  }
+}
 initUi();
 renderProfileUi();
 await Promise.all([checkBrain(), newSession()]);
