@@ -67,7 +67,8 @@ miss of the morning run did not repeat.
 
 | Version | Length | File |
 | --- | --- | --- |
-| v4 (current) | 2:52 (172.4 s), 1920x1080 | `video/shop_counter_demo_v4.mp4` |
+| v5 (current) | 2:56 (176.1 s), 1920x1080 | `video/shop_counter_demo_v5.mp4`, https://youtu.be/uJhJDnPU-Dg |
+| v4 | 2:52 (172.4 s), 1920x1080 | `video/shop_counter_demo_v4.mp4` |
 
 Earlier cuts: v1 2:46, v2 2:48, v3 2:47. Only the current version is quoted in README and Devpost.
 

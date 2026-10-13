@@ -5,7 +5,7 @@
 - **Try it in your browser (nothing to install, no keys):** https://x2uph6avweit5yuv5crwm474240pwtzb.lambda-url.us-east-1.on.aws/sim/
 - **Live MCP server (AWS Lambda):** https://x2uph6avweit5yuv5crwm474240pwtzb.lambda-url.us-east-1.on.aws/mcp
   (Roborock: `/stores/roborock/mcp`, health: `/health`)
-- **Demo video (2:52):** https://youtu.be/KcCVoWnQfLI
+- **Demo video (2:56):** https://youtu.be/uJhJDnPU-Dg
 - **How it was built, day by day:** [docs/BUILD_LOG.md](docs/BUILD_LOG.md)
 - **The library on its own (MIT):** [shelf-to-alexa](https://github.com/DmitriyTopka/shelf-to-alexa) turns any Shopify catalog into the same 9 MCP tools with one command
 

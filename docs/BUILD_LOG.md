@@ -180,3 +180,8 @@ cd apps/shop-counter && npm run check      # live end-to-end check against the r
 ```
 
 `docs/CONTRACT.md` keeps a changelog of every contract version from v1.1 to v1.7.
+
+## October 13, late: video v5
+
+- Same live turns as v4, three narration changes: the hook now says why "my robot" was enough (his devices travel with him to every store), the Roborock callback says it again, and the closing card is a diagram (one device closet, two stores, any Shopify store dashed) with a QR code to the live simulator. 2:56.
+- Security review of the account-linking code: the client metadata fetch now refuses hosts that resolve to private addresses, connects only to the address it checked, and stops reading at 5 KB.
